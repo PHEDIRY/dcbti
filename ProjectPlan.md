@@ -32,6 +32,7 @@ Payments: Integration for subscription/premium access (available at MVP); Taiwan
 Platform: Flutter + Dart (latest Android & iOS versions).
 Backend: Firebase (Authentication, Firestore database, Cloud Messaging, Analytics, Functions).
 Version Control: GitHub.
+Development OS: Windows
 
 4. UX/UI Design
 Try to use Apple's Human Interface Guidelines, let's make something sleek, sexy, modern, and easy to use, with nice animations too if we can.
