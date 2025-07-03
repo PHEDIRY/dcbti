@@ -14,12 +14,18 @@ class _SleepDiaryEntryScreenState extends State<SleepDiaryEntryScreen> {
   int _currentStep = 0;
 
   // Basic sleep info
-  DateTime _entryDate = DateTime.now();
   DateTime _bedTime = DateTime.now().subtract(const Duration(hours: 8));
+  int _timeToFallAsleepHours = 0;
   int _timeToFallAsleepMinutes = 15;
+  int _initialOutOfBedHours = 0;
+  int _initialOutOfBedMinutes = 0;
+  String? _sleepDifficultyReason;
   int _numberOfAwakenings = 0;
   final List<WakeUpEvent> _wakeUpEvents = [];
+  String? _wakeUpDifficultyReason;
   DateTime _finalAwakeningTime = DateTime.now();
+  bool _immediateWakeUp = false;
+  int _timeInBedAfterWakingHours = 0;
   int _timeInBedAfterWakingMinutes = 0;
   double _sleepQuality = 3.0;
 
@@ -38,16 +44,18 @@ class _SleepDiaryEntryScreenState extends State<SleepDiaryEntryScreen> {
   final Set<String> _selectedTags = {};
 
   List<Widget> get _pages => [
-        _buildDateSelectionPage(),
         _buildBedTimePage(),
         _buildTimeToFallAsleepPage(),
+        _buildInitialOutOfBedPage(),
+        _buildSleepDifficultyReasonPage(),
         _buildNumberOfAwakeningsPage(),
+        _buildWakeUpDifficultyReasonPage(),
         _buildFinalAwakeningPage(),
+        _buildImmediateWakeUpPage(),
         _buildTimeInBedAfterWakingPage(),
         _buildSleepQualityPage(),
         _buildConsumptionEventsPage(),
         _buildTagsPage(),
-        _buildNotesPage(),
       ];
 
   void _showTimePicker(BuildContext context, DateTime initialTime, String title,
@@ -141,16 +149,16 @@ class _SleepDiaryEntryScreenState extends State<SleepDiaryEntryScreen> {
               height: 216,
               child: CupertinoDatePicker(
                 mode: CupertinoDatePickerMode.date,
-                initialDateTime: _entryDate,
+                initialDateTime: _bedTime,
                 maximumDate: DateTime.now(),
                 onDateTimeChanged: (DateTime newDate) {
                   setState(() {
-                    _entryDate = DateTime(
+                    _bedTime = DateTime(
                       newDate.year,
                       newDate.month,
                       newDate.day,
-                      _entryDate.hour,
-                      _entryDate.minute,
+                      _bedTime.hour,
+                      _bedTime.minute,
                     );
                   });
                 },
@@ -170,14 +178,16 @@ class _SleepDiaryEntryScreenState extends State<SleepDiaryEntryScreen> {
 
   void _handleSubmit() {
     final entry = SleepDiaryEntry.create(
-      entryDate: _entryDate,
+      entryDate: _bedTime,
       bedTime: _bedTime,
       wakeTime: _finalAwakeningTime,
-      timeToFallAsleepMinutes: _timeToFallAsleepMinutes,
+      timeToFallAsleepMinutes:
+          _timeToFallAsleepHours * 60 + _timeToFallAsleepMinutes,
       numberOfAwakenings: _numberOfAwakenings,
       wakeUpEvents: _wakeUpEvents,
       finalAwakeningTime: _finalAwakeningTime,
-      timeInBedAfterWakingMinutes: _timeInBedAfterWakingMinutes,
+      timeInBedAfterWakingMinutes:
+          _timeInBedAfterWakingHours * 60 + _timeInBedAfterWakingMinutes,
       sleepQuality: _sleepQuality,
       caffeineConsumption: _caffeineConsumption,
       alcoholConsumption: _alcoholConsumption,
@@ -187,6 +197,11 @@ class _SleepDiaryEntryScreenState extends State<SleepDiaryEntryScreen> {
       lastMealTime: _lastMealTime,
       sleepTags: _selectedTags.toList(),
       notes: _notesController.text.isEmpty ? null : _notesController.text,
+      sleepDifficultyReason: _sleepDifficultyReason,
+      wakeUpDifficultyReason: _wakeUpDifficultyReason,
+      immediateWakeUp: _immediateWakeUp,
+      initialOutOfBedDurationMinutes:
+          _initialOutOfBedHours * 60 + _initialOutOfBedMinutes,
     );
 
     print('[SleepDiaryEntryScreen] Created entry: ${entry.toMap()}');
@@ -217,47 +232,139 @@ class _SleepDiaryEntryScreenState extends State<SleepDiaryEntryScreen> {
     });
   }
 
-  @override
-  Widget build(BuildContext context) {
-    return CupertinoPageScaffold(
-      navigationBar: CupertinoNavigationBar(
-        middle: const Text(
-          '睡眠日記',
+  void _showCloseConfirmation() {
+    showCupertinoDialog<void>(
+      context: context,
+      builder: (BuildContext context) => CupertinoAlertDialog(
+        title: const Text(
+          '確定要離開嗎？',
           style: TextStyle(
             fontFamily: 'SF Pro Display',
             fontWeight: FontWeight.w600,
           ),
         ),
-        trailing: _currentStep == _pages.length - 1
-            ? CupertinoButton(
-                padding: EdgeInsets.zero,
-                onPressed: _handleSubmit,
-                child: const Text('儲存'),
-              )
-            : null,
+        content: const Text(
+          '所有已輸入的資料將會遺失',
+          style: TextStyle(
+            fontFamily: 'SF Pro Text',
+          ),
+        ),
+        actions: <CupertinoDialogAction>[
+          CupertinoDialogAction(
+            isDefaultAction: true,
+            onPressed: () {
+              Navigator.pop(context); // Close dialog
+            },
+            child: const Text('取消'),
+          ),
+          CupertinoDialogAction(
+            isDestructiveAction: true,
+            onPressed: () {
+              Navigator.pop(context); // Close dialog
+              Navigator.pop(context); // Close entry form
+            },
+            child: const Text('離開'),
+          ),
+        ],
       ),
-      child: SafeArea(
-        child: Column(
-          children: [
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16.0),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const SizedBox(height: 16),
-                  _buildProgressIndicator(),
-                  const SizedBox(height: 32),
-                ],
-              ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return CupertinoPageScaffold(
+      navigationBar: CupertinoNavigationBar(
+        padding: const EdgeInsetsDirectional.only(end: 8),
+        border: null,
+        leading: CupertinoButton(
+          padding: EdgeInsets.zero,
+          onPressed: _currentStep > 0
+              ? () {
+                  setState(() {
+                    _currentStep--;
+                  });
+                }
+              : () {
+                  Navigator.of(context).pop();
+                },
+          child: const Icon(CupertinoIcons.back),
+        ),
+        middle: const Padding(
+          padding: EdgeInsets.only(left: 8),
+          child: Text(
+            '新增睡眠日記',
+            style: TextStyle(
+              fontFamily: 'SF Pro Display',
+              fontSize: 17,
+              fontWeight: FontWeight.w600,
             ),
-            Expanded(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.symmetric(horizontal: 16.0),
-                child: _pages[_currentStep],
-              ),
+          ),
+        ),
+        trailing: CupertinoButton(
+          padding: EdgeInsets.zero,
+          onPressed: _showCloseConfirmation,
+          child: const Icon(CupertinoIcons.xmark),
+        ),
+      ),
+      child: Container(
+        color: CupertinoColors.systemGroupedBackground,
+        child: GestureDetector(
+          onHorizontalDragEnd: (DragEndDetails details) {
+            if (details.primaryVelocity! > 0 && _currentStep > 0) {
+              // Swipe right to go back
+              setState(() {
+                _currentStep--;
+              });
+            }
+          },
+          child: SafeArea(
+            child: Column(
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16.0, 8.0, 16.0, 0),
+                  child: Column(
+                    children: [
+                      Text(
+                        DateFormat('yyyy年M月d日 (E)', 'zh_TW').format(_bedTime),
+                        style: const TextStyle(
+                          fontFamily: 'SF Pro Text',
+                          fontSize: 15,
+                          color: CupertinoColors.systemBlue,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      _buildProgressIndicator(),
+                      const SizedBox(height: 24),
+                    ],
+                  ),
+                ),
+                Expanded(
+                  child: Container(
+                    decoration: const BoxDecoration(
+                      color: CupertinoColors.systemBackground,
+                      borderRadius: BorderRadius.only(
+                        topLeft: Radius.circular(16),
+                        topRight: Radius.circular(16),
+                      ),
+                    ),
+                    child: SingleChildScrollView(
+                      padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                      physics: const AlwaysScrollableScrollPhysics(),
+                      child: Column(
+                        children: [
+                          const SizedBox(height: 24),
+                          _pages[_currentStep],
+                          // Add bottom padding to ensure content doesn't get cut off
+                          const SizedBox(height: 16),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+                _buildNavigationButton(),
+              ],
             ),
-            _buildNavigationButton(),
-          ],
+          ),
         ),
       ),
     );
@@ -328,7 +435,15 @@ class _SleepDiaryEntryScreenState extends State<SleepDiaryEntryScreen> {
           mainAxisSize: MainAxisSize.min,
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            if (_currentStep < _pages.length - 1)
+            if (_currentStep == _pages.length - 1)
+              SizedBox(
+                width: double.infinity,
+                child: CupertinoButton.filled(
+                  onPressed: _handleSubmit,
+                  child: const Text('儲存'),
+                ),
+              )
+            else
               SizedBox(
                 width: double.infinity,
                 child: CupertinoButton.filled(
@@ -340,32 +455,24 @@ class _SleepDiaryEntryScreenState extends State<SleepDiaryEntryScreen> {
                   child: const Text('繼續'),
                 ),
               ),
-            if (_currentStep > 0)
-              Padding(
-                padding: const EdgeInsets.only(top: 8),
-                child: CupertinoButton(
-                  padding: EdgeInsets.zero,
-                  onPressed: () {
-                    setState(() {
-                      _currentStep--;
-                    });
-                  },
-                  child: const Text('返回上一題'),
-                ),
-              ),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildDateSelectionPage() {
+  Widget _buildTimePicker({
+    required String title,
+    required String subtitle,
+    required DateTime time,
+    required Function(DateTime) onChanged,
+  }) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
-          '這次睡眠是在什麼時候？',
-          style: TextStyle(
+        Text(
+          title,
+          style: const TextStyle(
             fontFamily: 'SF Pro Display',
             fontSize: 24,
             fontWeight: FontWeight.bold,
@@ -373,88 +480,198 @@ class _SleepDiaryEntryScreenState extends State<SleepDiaryEntryScreen> {
           ),
         ),
         const SizedBox(height: 8),
-        const Text(
-          '選擇這次睡眠的日期',
-          style: TextStyle(
+        Text(
+          subtitle,
+          style: const TextStyle(
             fontFamily: 'SF Pro Text',
             fontSize: 17,
             color: CupertinoColors.systemGrey,
           ),
         ),
         const SizedBox(height: 24),
-        GestureDetector(
-          onTap: () => _showDatePicker(context),
-          child: Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: CupertinoColors.systemBackground,
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(
-                color: CupertinoColors.systemGrey5,
-                width: 1,
+        Column(
+          children: [
+            const SizedBox(height: 8),
+            const Text(
+              '選擇時間',
+              style: TextStyle(
+                fontFamily: 'SF Pro Text',
+                fontSize: 17,
+                color: CupertinoColors.systemGrey,
               ),
             ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            const SizedBox(height: 16),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Text(
-                  DateFormat('yyyy年M月d日 (E)', 'zh_TW').format(_entryDate),
-                  style: const TextStyle(
-                    fontFamily: 'SF Pro Text',
-                    fontSize: 17,
-                    color: CupertinoColors.label,
-                  ),
+                Column(
+                  children: [
+                    const Text(
+                      '小時',
+                      style: TextStyle(
+                        fontFamily: 'SF Pro Text',
+                        fontSize: 15,
+                        color: CupertinoColors.label,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    SizedBox(
+                      width: 80,
+                      height: 160,
+                      child: CupertinoPicker(
+                        selectionOverlay: null,
+                        magnification: 1.1,
+                        squeeze: 1.0,
+                        itemExtent: 40,
+                        scrollController: FixedExtentScrollController(
+                          initialItem: time.hour,
+                        ),
+                        onSelectedItemChanged: (int value) {
+                          onChanged(DateTime(
+                            time.year,
+                            time.month,
+                            time.day,
+                            value,
+                            time.minute,
+                          ));
+                        },
+                        children: List<Widget>.generate(24, (int index) {
+                          return Center(
+                            child: Text(
+                              index.toString().padLeft(2, '0'),
+                              style: const TextStyle(
+                                fontFamily: 'SF Pro Text',
+                                fontSize: 22,
+                                color: CupertinoColors.label,
+                              ),
+                            ),
+                          );
+                        }),
+                      ),
+                    ),
+                  ],
                 ),
-                const Icon(
-                  CupertinoIcons.calendar,
-                  color: CupertinoColors.systemGrey,
+                const SizedBox(width: 24),
+                Column(
+                  children: [
+                    const Text(
+                      '分鐘',
+                      style: TextStyle(
+                        fontFamily: 'SF Pro Text',
+                        fontSize: 15,
+                        color: CupertinoColors.label,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    SizedBox(
+                      width: 80,
+                      height: 160,
+                      child: CupertinoPicker(
+                        selectionOverlay: null,
+                        magnification: 1.1,
+                        squeeze: 1.0,
+                        itemExtent: 40,
+                        scrollController: FixedExtentScrollController(
+                          initialItem: time.minute,
+                        ),
+                        onSelectedItemChanged: (int value) {
+                          onChanged(DateTime(
+                            time.year,
+                            time.month,
+                            time.day,
+                            time.hour,
+                            value,
+                          ));
+                        },
+                        children: List<Widget>.generate(60, (int index) {
+                          return Center(
+                            child: Text(
+                              index.toString().padLeft(2, '0'),
+                              style: const TextStyle(
+                                fontFamily: 'SF Pro Text',
+                                fontSize: 22,
+                                color: CupertinoColors.label,
+                              ),
+                            ),
+                          );
+                        }),
+                      ),
+                    ),
+                  ],
                 ),
               ],
             ),
-          ),
+            const SizedBox(height: 16),
+            Text(
+              '選擇的時間: ${time.hour.toString().padLeft(2, '0')}:${time.minute.toString().padLeft(2, '0')}',
+              style: const TextStyle(
+                fontFamily: 'SF Pro Text',
+                fontSize: 17,
+                color: CupertinoColors.systemGrey,
+              ),
+            ),
+            const SizedBox(height: 8),
+          ],
         ),
       ],
     );
   }
 
   Widget _buildBedTimePage() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text(
-          '你什麼時候上床睡覺？',
-          style: TextStyle(
-            fontFamily: 'SF Pro Display',
-            fontSize: 24,
-            fontWeight: FontWeight.bold,
-            color: CupertinoColors.label,
-          ),
-        ),
-        const SizedBox(height: 8),
-        const Text(
-          '選擇你躺到床上準備睡覺的時間',
-          style: TextStyle(
-            fontFamily: 'SF Pro Text',
-            fontSize: 17,
-            color: CupertinoColors.systemGrey,
-          ),
-        ),
-        const SizedBox(height: 24),
-        _buildTimeField(
-          label: '上床時間',
-          time: _bedTime,
-          onTimeSelected: (time) => setState(() => _bedTime = time),
-        ),
-      ],
+    return _buildTimePicker(
+      title: '你什麼時候上床睡覺？',
+      subtitle: '選擇你躺到床上準備睡覺的時間',
+      time: _bedTime,
+      onChanged: (time) {
+        setState(() {
+          _bedTime = DateTime(
+            _bedTime.year,
+            _bedTime.month,
+            _bedTime.day,
+            time.hour,
+            time.minute,
+          );
+        });
+      },
     );
   }
 
   Widget _buildTimeToFallAsleepPage() {
+    return _buildDurationPicker(
+      title: '躺上床後，花了多長時間才入睡？',
+      subtitle: '從躺到床上到入睡花了多少時間',
+      hours: _timeToFallAsleepHours,
+      minutes: _timeToFallAsleepMinutes,
+      onChanged: (hours, minutes) {
+        setState(() {
+          _timeToFallAsleepHours = hours;
+          _timeToFallAsleepMinutes = minutes;
+        });
+      },
+    );
+  }
+
+  Widget _buildInitialOutOfBedPage() {
+    return _buildDurationPicker(
+      title: '中間有離開床舖嗎？',
+      subtitle: '如果有的話離開多長時間',
+      hours: _initialOutOfBedHours,
+      minutes: _initialOutOfBedMinutes,
+      onChanged: (hours, minutes) {
+        setState(() {
+          _initialOutOfBedHours = hours;
+          _initialOutOfBedMinutes = minutes;
+        });
+      },
+    );
+  }
+
+  Widget _buildSleepDifficultyReasonPage() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const Text(
-          '你花了多久才入睡？',
+          '下列哪一項最讓你睡不著？',
           style: TextStyle(
             fontFamily: 'SF Pro Display',
             fontSize: 24,
@@ -464,7 +681,7 @@ class _SleepDiaryEntryScreenState extends State<SleepDiaryEntryScreen> {
         ),
         const SizedBox(height: 8),
         const Text(
-          '估計從躺到床上到入睡花了多少分鐘',
+          '選擇最符合你情況的原因',
           style: TextStyle(
             fontFamily: 'SF Pro Text',
             fontSize: 17,
@@ -472,14 +689,56 @@ class _SleepDiaryEntryScreenState extends State<SleepDiaryEntryScreen> {
           ),
         ),
         const SizedBox(height: 24),
-        _buildNumberInput(
-          title: '入睡時間',
-          value: _timeToFallAsleepMinutes,
-          onChanged: (value) =>
-              setState(() => _timeToFallAsleepMinutes = value),
-          suffix: '分鐘',
-        ),
+        _buildSleepDifficultyReasonSection(),
       ],
+    );
+  }
+
+  Widget _buildSleepDifficultyReasonSection() {
+    final reasons = [
+      '思緒奔騰',
+      '身體躁動不安',
+      '憂慮或焦慮',
+      '其他',
+      '以上皆無',
+    ];
+
+    return Column(
+      children: reasons.map((reason) {
+        final isSelected = _sleepDifficultyReason == reason;
+        return GestureDetector(
+          onTap: () => setState(
+              () => _sleepDifficultyReason = isSelected ? null : reason),
+          child: Container(
+            width: double.infinity,
+            margin: const EdgeInsets.only(bottom: 12),
+            padding: const EdgeInsets.symmetric(
+              horizontal: 16,
+              vertical: 14,
+            ),
+            decoration: BoxDecoration(
+              color: CupertinoColors.systemBackground,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: isSelected
+                    ? CupertinoColors.activeBlue
+                    : CupertinoColors.systemGrey5,
+                width: 1,
+              ),
+            ),
+            child: Text(
+              reason,
+              style: TextStyle(
+                fontFamily: 'SF Pro Text',
+                fontSize: 17,
+                color: isSelected
+                    ? CupertinoColors.activeBlue
+                    : CupertinoColors.label,
+              ),
+            ),
+          ),
+        );
+      }).toList(),
     );
   }
 
@@ -625,12 +884,12 @@ class _SleepDiaryEntryScreenState extends State<SleepDiaryEntryScreen> {
     );
   }
 
-  Widget _buildFinalAwakeningPage() {
+  Widget _buildWakeUpDifficultyReasonPage() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const Text(
-          '你最後是什麼時候醒來的？',
+          '下列哪一項最讓你一直醒著？',
           style: TextStyle(
             fontFamily: 'SF Pro Display',
             fontSize: 24,
@@ -640,7 +899,7 @@ class _SleepDiaryEntryScreenState extends State<SleepDiaryEntryScreen> {
         ),
         const SizedBox(height: 8),
         const Text(
-          '選擇最後一次醒來的時間',
+          '選擇最符合你情況的原因',
           style: TextStyle(
             fontFamily: 'SF Pro Text',
             fontSize: 17,
@@ -648,21 +907,84 @@ class _SleepDiaryEntryScreenState extends State<SleepDiaryEntryScreen> {
           ),
         ),
         const SizedBox(height: 24),
-        _buildTimeField(
-          label: '最後醒來時間',
-          time: _finalAwakeningTime,
-          onTimeSelected: (time) => setState(() => _finalAwakeningTime = time),
-        ),
+        _buildWakeUpDifficultyReasonSection(),
       ],
     );
   }
 
-  Widget _buildTimeInBedAfterWakingPage() {
+  Widget _buildWakeUpDifficultyReasonSection() {
+    final reasons = [
+      '思緒奔騰',
+      '身體躁動不安',
+      '憂慮或焦慮',
+      '其他',
+      '以上皆無',
+    ];
+
+    return Column(
+      children: reasons.map((reason) {
+        final isSelected = _wakeUpDifficultyReason == reason;
+        return GestureDetector(
+          onTap: () => setState(
+              () => _wakeUpDifficultyReason = isSelected ? null : reason),
+          child: Container(
+            width: double.infinity,
+            margin: const EdgeInsets.only(bottom: 12),
+            padding: const EdgeInsets.symmetric(
+              horizontal: 16,
+              vertical: 14,
+            ),
+            decoration: BoxDecoration(
+              color: CupertinoColors.systemBackground,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: isSelected
+                    ? CupertinoColors.activeBlue
+                    : CupertinoColors.systemGrey5,
+                width: 1,
+              ),
+            ),
+            child: Text(
+              reason,
+              style: TextStyle(
+                fontFamily: 'SF Pro Text',
+                fontSize: 17,
+                color: isSelected
+                    ? CupertinoColors.activeBlue
+                    : CupertinoColors.label,
+              ),
+            ),
+          ),
+        );
+      }).toList(),
+    );
+  }
+
+  Widget _buildFinalAwakeningPage() {
+    return _buildTimePicker(
+      title: '你最後是什麼時候醒來的？',
+      subtitle: '選擇最後一次醒來的時間',
+      time: _finalAwakeningTime,
+      onChanged: (time) {
+        setState(() {
+          _finalAwakeningTime = DateTime(
+            _finalAwakeningTime.year,
+            _finalAwakeningTime.month,
+            _finalAwakeningTime.day,
+            time.hour,
+            time.minute,
+          );
+        });
+      },
+    );
+  }
+
+  Widget _buildImmediateWakeUpPage() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const Text(
-          '醒來後你在床上待了多久？',
+          '你有在醒來的五分鐘之內，起身離開床舖嗎？',
           style: TextStyle(
             fontFamily: 'SF Pro Display',
             fontSize: 24,
@@ -672,7 +994,7 @@ class _SleepDiaryEntryScreenState extends State<SleepDiaryEntryScreen> {
         ),
         const SizedBox(height: 8),
         const Text(
-          '從最後一次醒來到起床下床的時間',
+          '選擇最符合你情況的答案',
           style: TextStyle(
             fontFamily: 'SF Pro Text',
             fontSize: 17,
@@ -680,30 +1002,83 @@ class _SleepDiaryEntryScreenState extends State<SleepDiaryEntryScreen> {
           ),
         ),
         const SizedBox(height: 24),
-        _buildNumberInput(
-          title: '躺床時間',
-          value: _timeInBedAfterWakingMinutes,
-          onChanged: (value) =>
-              setState(() => _timeInBedAfterWakingMinutes = value),
-          suffix: '分鐘',
-        ),
+        _buildImmediateWakeUpSection(),
       ],
+    );
+  }
+
+  Widget _buildImmediateWakeUpSection() {
+    final options = [
+      '是',
+      '否',
+    ];
+
+    return Column(
+      children: options.map((option) {
+        final isSelected = _immediateWakeUp == (option == '是');
+        return GestureDetector(
+          onTap: () => setState(() => _immediateWakeUp = option == '是'),
+          child: Container(
+            width: double.infinity,
+            margin: const EdgeInsets.only(bottom: 12),
+            padding: const EdgeInsets.symmetric(
+              horizontal: 16,
+              vertical: 14,
+            ),
+            decoration: BoxDecoration(
+              color: CupertinoColors.systemBackground,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: isSelected
+                    ? CupertinoColors.activeBlue
+                    : CupertinoColors.systemGrey5,
+                width: 1,
+              ),
+            ),
+            child: Text(
+              option,
+              style: TextStyle(
+                fontFamily: 'SF Pro Text',
+                fontSize: 17,
+                color: isSelected
+                    ? CupertinoColors.activeBlue
+                    : CupertinoColors.label,
+              ),
+            ),
+          ),
+        );
+      }).toList(),
+    );
+  }
+
+  Widget _buildTimeInBedAfterWakingPage() {
+    return _buildDurationPicker(
+      title: '在離開床舖之前，在床上賴床了多久？',
+      subtitle: '若不確定，大致預估即可',
+      hours: _timeInBedAfterWakingHours,
+      minutes: _timeInBedAfterWakingMinutes,
+      onChanged: (hours, minutes) {
+        setState(() {
+          _timeInBedAfterWakingHours = hours;
+          _timeInBedAfterWakingMinutes = minutes;
+        });
+      },
     );
   }
 
   Widget _buildSleepQualityPage() {
     final qualities = [
-      {'value': 4.0, 'label': '很棒', 'subtext': '精力充沛、煥然一新', 'emoji': '😊'},
-      {'value': 3.0, 'label': '好', 'subtext': '獲得休息、清醒', 'emoji': '🙂'},
-      {'value': 2.0, 'label': '普通', 'subtext': '沒什麼差別、一般', 'emoji': '😐'},
-      {'value': 1.0, 'label': '不好', 'subtext': '疲憊、昏沉、想睡覺', 'emoji': '😞'},
+      {'value': 4.0, 'label': '很好', 'subtext': '精神飽滿、心情愉悅', 'emoji': '😊'},
+      {'value': 3.0, 'label': '還不錯', 'subtext': '有點疲憊，但可以應付', 'emoji': '🙂'},
+      {'value': 2.0, 'label': '不太好', 'subtext': '疲憊、昏沉', 'emoji': '😐'},
+      {'value': 1.0, 'label': '很差', 'subtext': '非常疲憊、無法集中注意力', 'emoji': '😞'},
     ];
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const Text(
-          'Q17 醒來後，感覺精神與心情如何？',
+          '醒來後，感覺精神與心情如何？',
           style: TextStyle(
             fontFamily: 'SF Pro Display',
             fontSize: 24,
@@ -713,7 +1088,7 @@ class _SleepDiaryEntryScreenState extends State<SleepDiaryEntryScreen> {
         ),
         const SizedBox(height: 8),
         const Text(
-          'Q17',
+          '選擇最符合你情況的答案',
           style: TextStyle(
             fontFamily: 'SF Pro Text',
             fontSize: 17,
@@ -731,12 +1106,12 @@ class _SleepDiaryEntryScreenState extends State<SleepDiaryEntryScreen> {
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
                 color: isSelected
-                    ? const Color(0xFFFF9500)
+                    ? CupertinoColors.activeBlue
                     : CupertinoColors.systemBackground,
                 borderRadius: BorderRadius.circular(12),
                 border: Border.all(
                   color: isSelected
-                      ? const Color(0xFFFF9500)
+                      ? CupertinoColors.activeBlue
                       : CupertinoColors.systemGrey4,
                   width: 1,
                 ),
@@ -899,34 +1274,22 @@ class _SleepDiaryEntryScreenState extends State<SleepDiaryEntryScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Container(
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: CupertinoColors.systemGrey6.withOpacity(0.5),
-            borderRadius: BorderRadius.circular(12),
+        const Text(
+          '前一天是否有這些行為？',
+          style: TextStyle(
+            fontFamily: 'SF Pro Display',
+            fontSize: 24,
+            fontWeight: FontWeight.bold,
+            color: CupertinoColors.label,
           ),
-          child: const Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                '生活習慣',
-                style: TextStyle(
-                  fontFamily: 'SF Pro Display',
-                  fontSize: 20,
-                  fontWeight: FontWeight.w600,
-                  color: CupertinoColors.label,
-                ),
-              ),
-              SizedBox(height: 8),
-              Text(
-                '記錄這次睡眠期間前後的生活習慣，幫助了解影響睡眠品質的因素。',
-                style: TextStyle(
-                  fontFamily: 'SF Pro Text',
-                  fontSize: 15,
-                  color: CupertinoColors.systemGrey,
-                ),
-              ),
-            ],
+        ),
+        const SizedBox(height: 8),
+        const Text(
+          '選擇所有符合的項目',
+          style: TextStyle(
+            fontFamily: 'SF Pro Text',
+            fontSize: 17,
+            color: CupertinoColors.systemGrey,
           ),
         ),
         const SizedBox(height: 24),
@@ -962,7 +1325,7 @@ class _SleepDiaryEntryScreenState extends State<SleepDiaryEntryScreen> {
         ),
         const SizedBox(height: 24),
         _buildConsumptionEventSection(
-          title: '最後用餐時間',
+          title: '睡前吃東西/消夜',
           event: _lastMealTime,
           onChanged: (event) => setState(() => _lastMealTime = event),
         ),
@@ -974,27 +1337,44 @@ class _SleepDiaryEntryScreenState extends State<SleepDiaryEntryScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        const Text(
+          '請選擇所有跟這次睡眠有關的事項',
+          style: TextStyle(
+            fontFamily: 'SF Pro Display',
+            fontSize: 24,
+            fontWeight: FontWeight.bold,
+            color: CupertinoColors.label,
+          ),
+        ),
+        const SizedBox(height: 8),
+        const Text(
+          '選擇所有符合的項目',
+          style: TextStyle(
+            fontFamily: 'SF Pro Text',
+            fontSize: 17,
+            color: CupertinoColors.systemGrey,
+          ),
+        ),
+        const SizedBox(height: 24),
         _buildTagSection(
-          title: '日間活動',
+          title: '🌞日間活動',
           tags: SleepTags.daytimeActivities,
         ),
         const SizedBox(height: 24),
         _buildTagSection(
-          title: '睡前活動',
+          title: '🌜睡前活動',
           tags: SleepTags.bedtimeActivities,
         ),
         const SizedBox(height: 24),
         _buildTagSection(
-          title: '睡前物質',
+          title: '💊服用物質',
           tags: SleepTags.bedtimeSubstances,
         ),
         const SizedBox(height: 24),
         _buildTagSection(
-          title: '睡眠干擾',
+          title: '⚡睡眠干擾',
           tags: SleepTags.sleepDisturbances,
         ),
-        const SizedBox(height: 32),
-        _buildNotesSection(),
       ],
     );
   }
@@ -1303,6 +1683,151 @@ class _SleepDiaryEntryScreenState extends State<SleepDiaryEntryScreen> {
             ),
             decoration: null,
           ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildDurationPicker({
+    required String title,
+    required String subtitle,
+    required int hours,
+    required int minutes,
+    required Function(int hours, int minutes) onChanged,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          title,
+          style: const TextStyle(
+            fontFamily: 'SF Pro Display',
+            fontSize: 24,
+            fontWeight: FontWeight.bold,
+            color: CupertinoColors.label,
+          ),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          subtitle,
+          style: const TextStyle(
+            fontFamily: 'SF Pro Text',
+            fontSize: 17,
+            color: CupertinoColors.systemGrey,
+          ),
+        ),
+        const SizedBox(height: 24),
+        Column(
+          children: [
+            const SizedBox(height: 8),
+            const Text(
+              '選擇持續時間',
+              style: TextStyle(
+                fontFamily: 'SF Pro Text',
+                fontSize: 17,
+                color: CupertinoColors.systemGrey,
+              ),
+            ),
+            const SizedBox(height: 16),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Column(
+                  children: [
+                    const Text(
+                      '小時',
+                      style: TextStyle(
+                        fontFamily: 'SF Pro Text',
+                        fontSize: 15,
+                        color: CupertinoColors.label,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    SizedBox(
+                      width: 80,
+                      height: 160,
+                      child: CupertinoPicker(
+                        selectionOverlay: null,
+                        magnification: 1.1,
+                        squeeze: 1.0,
+                        itemExtent: 40,
+                        scrollController: FixedExtentScrollController(
+                          initialItem: hours,
+                        ),
+                        onSelectedItemChanged: (int value) {
+                          onChanged(value, minutes);
+                        },
+                        children: List<Widget>.generate(24, (int index) {
+                          return Center(
+                            child: Text(
+                              index.toString().padLeft(2, '0'),
+                              style: const TextStyle(
+                                fontFamily: 'SF Pro Text',
+                                fontSize: 22,
+                                color: CupertinoColors.label,
+                              ),
+                            ),
+                          );
+                        }),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(width: 24),
+                Column(
+                  children: [
+                    const Text(
+                      '分鐘',
+                      style: TextStyle(
+                        fontFamily: 'SF Pro Text',
+                        fontSize: 15,
+                        color: CupertinoColors.label,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    SizedBox(
+                      width: 80,
+                      height: 160,
+                      child: CupertinoPicker(
+                        selectionOverlay: null,
+                        magnification: 1.1,
+                        squeeze: 1.0,
+                        itemExtent: 40,
+                        scrollController: FixedExtentScrollController(
+                          initialItem: minutes,
+                        ),
+                        onSelectedItemChanged: (int value) {
+                          onChanged(hours, value);
+                        },
+                        children: List<Widget>.generate(60, (int index) {
+                          return Center(
+                            child: Text(
+                              index.toString().padLeft(2, '0'),
+                              style: const TextStyle(
+                                fontFamily: 'SF Pro Text',
+                                fontSize: 22,
+                                color: CupertinoColors.label,
+                              ),
+                            ),
+                          );
+                        }),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            Text(
+              '選擇的時間: ${hours.toString().padLeft(2, '0')} 小時 ${minutes.toString().padLeft(2, '0')} 分鐘',
+              style: const TextStyle(
+                fontFamily: 'SF Pro Text',
+                fontSize: 17,
+                color: CupertinoColors.systemGrey,
+              ),
+            ),
+            const SizedBox(height: 8),
+          ],
         ),
       ],
     );

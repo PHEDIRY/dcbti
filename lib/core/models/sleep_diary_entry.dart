@@ -20,6 +20,10 @@ class SleepDiaryEntry {
   final List<String> sleepTags;
   final String? notes;
   final DateTime createdAt;
+  final String? sleepDifficultyReason; // 思緒奔騰、身體躁動不安、憂慮或焦慮、其他、以上皆無
+  final String? wakeUpDifficultyReason; // 思緒奔騰、身體躁動不安、憂慮或焦慮、其他、以上皆無
+  final bool immediateWakeUp; // 在醒來的五分鐘之內是否有起身離開床舖
+  final int? initialOutOfBedDurationMinutes; // 躺上床後離開床舖的時間
 
   Duration get sleepDuration => wakeTime.difference(bedTime);
   Duration get timeInBed => Duration(
@@ -47,6 +51,10 @@ class SleepDiaryEntry {
     required this.sleepTags,
     this.notes,
     required this.createdAt,
+    this.sleepDifficultyReason,
+    this.wakeUpDifficultyReason,
+    required this.immediateWakeUp,
+    this.initialOutOfBedDurationMinutes,
   });
 
   // Create a new entry
@@ -68,6 +76,10 @@ class SleepDiaryEntry {
     ConsumptionEvent? lastMealTime,
     required List<String> sleepTags,
     String? notes,
+    String? sleepDifficultyReason,
+    String? wakeUpDifficultyReason,
+    bool immediateWakeUp = false,
+    int? initialOutOfBedDurationMinutes,
   }) {
     return SleepDiaryEntry(
       id: DateTime.now().millisecondsSinceEpoch.toString(),
@@ -89,6 +101,10 @@ class SleepDiaryEntry {
       sleepTags: sleepTags,
       notes: notes,
       createdAt: DateTime.now(),
+      sleepDifficultyReason: sleepDifficultyReason,
+      wakeUpDifficultyReason: wakeUpDifficultyReason,
+      immediateWakeUp: immediateWakeUp,
+      initialOutOfBedDurationMinutes: initialOutOfBedDurationMinutes,
     );
   }
 
@@ -114,6 +130,10 @@ class SleepDiaryEntry {
       'sleepTags': sleepTags,
       'notes': notes,
       'createdAt': Timestamp.fromDate(createdAt),
+      'sleepDifficultyReason': sleepDifficultyReason,
+      'wakeUpDifficultyReason': wakeUpDifficultyReason,
+      'immediateWakeUp': immediateWakeUp,
+      'initialOutOfBedDurationMinutes': initialOutOfBedDurationMinutes,
     };
   }
 
@@ -159,6 +179,11 @@ class SleepDiaryEntry {
       sleepTags: (map['sleepTags'] as List<dynamic>).cast<String>(),
       notes: map['notes'] as String?,
       createdAt: (map['createdAt'] as Timestamp).toDate(),
+      sleepDifficultyReason: map['sleepDifficultyReason'] as String?,
+      wakeUpDifficultyReason: map['wakeUpDifficultyReason'] as String?,
+      immediateWakeUp: map['immediateWakeUp'] as bool? ?? false,
+      initialOutOfBedDurationMinutes:
+          map['initialOutOfBedDurationMinutes'] as int?,
     );
   }
 
@@ -183,6 +208,10 @@ class SleepDiaryEntry {
     List<String>? sleepTags,
     String? notes,
     DateTime? createdAt,
+    String? sleepDifficultyReason,
+    String? wakeUpDifficultyReason,
+    bool? immediateWakeUp,
+    int? initialOutOfBedDurationMinutes,
   }) {
     return SleepDiaryEntry(
       id: id ?? this.id,
@@ -207,6 +236,13 @@ class SleepDiaryEntry {
       sleepTags: sleepTags ?? this.sleepTags,
       notes: notes ?? this.notes,
       createdAt: createdAt ?? this.createdAt,
+      sleepDifficultyReason:
+          sleepDifficultyReason ?? this.sleepDifficultyReason,
+      wakeUpDifficultyReason:
+          wakeUpDifficultyReason ?? this.wakeUpDifficultyReason,
+      immediateWakeUp: immediateWakeUp ?? this.immediateWakeUp,
+      initialOutOfBedDurationMinutes:
+          initialOutOfBedDurationMinutes ?? this.initialOutOfBedDurationMinutes,
     );
   }
 }
