@@ -1,4 +1,5 @@
 import 'package:flutter/cupertino.dart';
+import 'package:flutter/material.dart' show Divider;
 import '../../../core/models/sleep_diary_entry.dart';
 import 'package:intl/intl.dart';
 
@@ -13,19 +14,16 @@ class _SleepDiaryEntryScreenState extends State<SleepDiaryEntryScreen> {
   int _currentStep = 0;
 
   // Basic sleep info
-  DateTime _entryDate =
-      DateTime.now(); // Changed from final to allow modification
+  DateTime _entryDate = DateTime.now();
   DateTime _bedTime = DateTime.now().subtract(const Duration(hours: 8));
   int _timeToFallAsleepMinutes = 15;
-  DateTime _finalAwakeningTime = DateTime.now();
-  DateTime _outOfBedTime = DateTime.now();
-
-  // Wake up events
   int _numberOfAwakenings = 0;
   final List<WakeUpEvent> _wakeUpEvents = [];
+  DateTime _finalAwakeningTime = DateTime.now();
+  int _timeInBedAfterWakingMinutes = 0;
+  double _sleepQuality = 3.0;
 
   // Quality and notes
-  double _sleepQuality = 3.0;
   final TextEditingController _notesController = TextEditingController();
 
   // Consumption events
@@ -38,6 +36,19 @@ class _SleepDiaryEntryScreenState extends State<SleepDiaryEntryScreen> {
 
   // Tags
   final Set<String> _selectedTags = {};
+
+  List<Widget> get _pages => [
+        _buildDateSelectionPage(),
+        _buildBedTimePage(),
+        _buildTimeToFallAsleepPage(),
+        _buildNumberOfAwakeningsPage(),
+        _buildFinalAwakeningPage(),
+        _buildTimeInBedAfterWakingPage(),
+        _buildSleepQualityPage(),
+        _buildConsumptionEventsPage(),
+        _buildTagsPage(),
+        _buildNotesPage(),
+      ];
 
   void _showTimePicker(BuildContext context, DateTime initialTime, String title,
       Function(DateTime) onTimeSelected) {
@@ -158,7 +169,6 @@ class _SleepDiaryEntryScreenState extends State<SleepDiaryEntryScreen> {
   }
 
   void _handleSubmit() {
-    // TODO: Implement submission to Firestore
     final entry = SleepDiaryEntry.create(
       entryDate: _entryDate,
       bedTime: _bedTime,
@@ -167,7 +177,7 @@ class _SleepDiaryEntryScreenState extends State<SleepDiaryEntryScreen> {
       numberOfAwakenings: _numberOfAwakenings,
       wakeUpEvents: _wakeUpEvents,
       finalAwakeningTime: _finalAwakeningTime,
-      outOfBedTime: _outOfBedTime,
+      timeInBedAfterWakingMinutes: _timeInBedAfterWakingMinutes,
       sleepQuality: _sleepQuality,
       caffeineConsumption: _caffeineConsumption,
       alcoholConsumption: _alcoholConsumption,
@@ -218,54 +228,310 @@ class _SleepDiaryEntryScreenState extends State<SleepDiaryEntryScreen> {
             fontWeight: FontWeight.w600,
           ),
         ),
-        trailing: CupertinoButton(
-          padding: EdgeInsets.zero,
-          onPressed: _currentStep == 2 ? _handleSubmit : null,
-          child: const Text('儲存'),
-        ),
+        trailing: _currentStep == _pages.length - 1
+            ? CupertinoButton(
+                padding: EdgeInsets.zero,
+                onPressed: _handleSubmit,
+                child: const Text('儲存'),
+              )
+            : null,
       ),
       child: SafeArea(
         child: Column(
           children: [
-            _buildStepIndicator(),
-            Expanded(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.all(16.0),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    _buildDateHeader(),
-                    const SizedBox(height: 24),
-                    _buildCurrentStep(),
-                  ],
-                ),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const SizedBox(height: 16),
+                  _buildProgressIndicator(),
+                  const SizedBox(height: 32),
+                ],
               ),
             ),
-            _buildNavigationButtons(),
+            Expanded(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                child: _pages[_currentStep],
+              ),
+            ),
+            _buildNavigationButton(),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildDateHeader() {
-    final dateStr = DateFormat('yyyy年M月d日 (E)', 'zh_TW').format(_entryDate);
-
-    return GestureDetector(
-      onTap: () => _showDatePicker(context),
-      child: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: CupertinoColors.systemGrey6.withOpacity(0.5),
-          borderRadius: BorderRadius.circular(12),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+  Widget _buildProgressIndicator() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
           children: [
-            Row(
+            Text(
+              '問題 ${_currentStep + 1}/${_pages.length}',
+              style: const TextStyle(
+                fontFamily: 'SF Pro Text',
+                fontSize: 13,
+                color: CupertinoColors.systemGrey,
+              ),
+            ),
+            const Spacer(),
+            Text(
+              '${((_currentStep + 1) / _pages.length * 100).round()}%',
+              style: const TextStyle(
+                fontFamily: 'SF Pro Text',
+                fontSize: 13,
+                color: CupertinoColors.systemGrey,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 6),
+        Container(
+          width: double.infinity,
+          height: 3,
+          decoration: BoxDecoration(
+            color: CupertinoColors.systemGrey6,
+            borderRadius: BorderRadius.circular(1.5),
+          ),
+          child: FractionallySizedBox(
+            alignment: Alignment.centerLeft,
+            widthFactor: (_currentStep + 1) / _pages.length,
+            child: Container(
+              decoration: BoxDecoration(
+                color: CupertinoColors.activeBlue,
+                borderRadius: BorderRadius.circular(1.5),
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildNavigationButton() {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: const BoxDecoration(
+        border: Border(
+          top: BorderSide(
+            color: CupertinoColors.systemGrey5,
+            width: 1,
+          ),
+        ),
+      ),
+      child: SafeArea(
+        top: false,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            if (_currentStep < _pages.length - 1)
+              SizedBox(
+                width: double.infinity,
+                child: CupertinoButton.filled(
+                  onPressed: () {
+                    setState(() {
+                      _currentStep++;
+                    });
+                  },
+                  child: const Text('繼續'),
+                ),
+              ),
+            if (_currentStep > 0)
+              Padding(
+                padding: const EdgeInsets.only(top: 8),
+                child: CupertinoButton(
+                  padding: EdgeInsets.zero,
+                  onPressed: () {
+                    setState(() {
+                      _currentStep--;
+                    });
+                  },
+                  child: const Text('返回上一題'),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDateSelectionPage() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          '這次睡眠是在什麼時候？',
+          style: TextStyle(
+            fontFamily: 'SF Pro Display',
+            fontSize: 24,
+            fontWeight: FontWeight.bold,
+            color: CupertinoColors.label,
+          ),
+        ),
+        const SizedBox(height: 8),
+        const Text(
+          '選擇這次睡眠的日期',
+          style: TextStyle(
+            fontFamily: 'SF Pro Text',
+            fontSize: 17,
+            color: CupertinoColors.systemGrey,
+          ),
+        ),
+        const SizedBox(height: 24),
+        GestureDetector(
+          onTap: () => _showDatePicker(context),
+          child: Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: CupertinoColors.systemBackground,
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(
+                color: CupertinoColors.systemGrey5,
+                width: 1,
+              ),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Text(
-                  dateStr,
+                  DateFormat('yyyy年M月d日 (E)', 'zh_TW').format(_entryDate),
+                  style: const TextStyle(
+                    fontFamily: 'SF Pro Text',
+                    fontSize: 17,
+                    color: CupertinoColors.label,
+                  ),
+                ),
+                const Icon(
+                  CupertinoIcons.calendar,
+                  color: CupertinoColors.systemGrey,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildBedTimePage() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          '你什麼時候上床睡覺？',
+          style: TextStyle(
+            fontFamily: 'SF Pro Display',
+            fontSize: 24,
+            fontWeight: FontWeight.bold,
+            color: CupertinoColors.label,
+          ),
+        ),
+        const SizedBox(height: 8),
+        const Text(
+          '選擇你躺到床上準備睡覺的時間',
+          style: TextStyle(
+            fontFamily: 'SF Pro Text',
+            fontSize: 17,
+            color: CupertinoColors.systemGrey,
+          ),
+        ),
+        const SizedBox(height: 24),
+        _buildTimeField(
+          label: '上床時間',
+          time: _bedTime,
+          onTimeSelected: (time) => setState(() => _bedTime = time),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildTimeToFallAsleepPage() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          '你花了多久才入睡？',
+          style: TextStyle(
+            fontFamily: 'SF Pro Display',
+            fontSize: 24,
+            fontWeight: FontWeight.bold,
+            color: CupertinoColors.label,
+          ),
+        ),
+        const SizedBox(height: 8),
+        const Text(
+          '估計從躺到床上到入睡花了多少分鐘',
+          style: TextStyle(
+            fontFamily: 'SF Pro Text',
+            fontSize: 17,
+            color: CupertinoColors.systemGrey,
+          ),
+        ),
+        const SizedBox(height: 24),
+        _buildNumberInput(
+          title: '入睡時間',
+          value: _timeToFallAsleepMinutes,
+          onChanged: (value) =>
+              setState(() => _timeToFallAsleepMinutes = value),
+          suffix: '分鐘',
+        ),
+      ],
+    );
+  }
+
+  Widget _buildNumberOfAwakeningsPage() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          '睡眠期間醒來幾次？',
+          style: TextStyle(
+            fontFamily: 'SF Pro Display',
+            fontSize: 24,
+            fontWeight: FontWeight.bold,
+            color: CupertinoColors.label,
+          ),
+        ),
+        const SizedBox(height: 8),
+        const Text(
+          '不包括最後起床的那一次',
+          style: TextStyle(
+            fontFamily: 'SF Pro Text',
+            fontSize: 17,
+            color: CupertinoColors.systemGrey,
+          ),
+        ),
+        const SizedBox(height: 24),
+        _buildNumberInput(
+          title: '醒來次數',
+          value: _numberOfAwakenings,
+          onChanged: (value) {
+            setState(() {
+              _numberOfAwakenings = value;
+              while (_wakeUpEvents.length < value) {
+                _addWakeUpEvent();
+              }
+              while (_wakeUpEvents.length > value) {
+                _wakeUpEvents.removeLast();
+              }
+            });
+          },
+          suffix: '次',
+        ),
+        if (_numberOfAwakenings > 0) ...[
+          const SizedBox(height: 32),
+          ..._wakeUpEvents.asMap().entries.map((entry) {
+            final index = entry.key;
+            final event = entry.value;
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '第 ${index + 1} 次醒來',
                   style: const TextStyle(
                     fontFamily: 'SF Pro Display',
                     fontSize: 20,
@@ -273,26 +539,249 @@ class _SleepDiaryEntryScreenState extends State<SleepDiaryEntryScreen> {
                     color: CupertinoColors.label,
                   ),
                 ),
-                const SizedBox(width: 8),
-                const Icon(
-                  CupertinoIcons.calendar,
-                  color: CupertinoColors.systemGrey,
-                  size: 20,
+                const SizedBox(height: 16),
+                _buildTimeField(
+                  label: '醒來時間',
+                  time: event.time,
+                  onTimeSelected: (time) => _updateWakeUpEvent(
+                    index,
+                    WakeUpEvent(
+                      time: time,
+                      gotOutOfBed: event.gotOutOfBed,
+                      outOfBedDurationMinutes: event.outOfBedDurationMinutes,
+                      stayedInBedMinutes: event.stayedInBedMinutes,
+                    ),
+                  ),
                 ),
+                const SizedBox(height: 16),
+                Row(
+                  children: [
+                    CupertinoSwitch(
+                      value: event.gotOutOfBed,
+                      onChanged: (value) => _updateWakeUpEvent(
+                        index,
+                        WakeUpEvent(
+                          time: event.time,
+                          gotOutOfBed: value,
+                          outOfBedDurationMinutes:
+                              value ? event.outOfBedDurationMinutes : null,
+                          stayedInBedMinutes: event.stayedInBedMinutes,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    const Text(
+                      '是否下床',
+                      style: TextStyle(
+                        fontFamily: 'SF Pro Text',
+                        fontSize: 17,
+                        color: CupertinoColors.label,
+                      ),
+                    ),
+                  ],
+                ),
+                if (event.gotOutOfBed) ...[
+                  const SizedBox(height: 16),
+                  _buildNumberInput(
+                    title: '下床時間',
+                    value: event.outOfBedDurationMinutes ?? 0,
+                    onChanged: (value) => _updateWakeUpEvent(
+                      index,
+                      WakeUpEvent(
+                        time: event.time,
+                        gotOutOfBed: event.gotOutOfBed,
+                        outOfBedDurationMinutes: value,
+                        stayedInBedMinutes: event.stayedInBedMinutes,
+                      ),
+                    ),
+                    suffix: '分鐘',
+                  ),
+                ],
+                const SizedBox(height: 16),
+                _buildNumberInput(
+                  title: '清醒時間',
+                  value: event.stayedInBedMinutes,
+                  onChanged: (value) => _updateWakeUpEvent(
+                    index,
+                    WakeUpEvent(
+                      time: event.time,
+                      gotOutOfBed: event.gotOutOfBed,
+                      outOfBedDurationMinutes: event.outOfBedDurationMinutes,
+                      stayedInBedMinutes: value,
+                    ),
+                  ),
+                  suffix: '分鐘',
+                ),
+                if (index < _wakeUpEvents.length - 1)
+                  const Padding(
+                    padding: EdgeInsets.symmetric(vertical: 24),
+                    child: Divider(),
+                  ),
               ],
-            ),
-            const SizedBox(height: 8),
-            const Text(
-              '這是一筆睡眠日記，記錄你在這個時間點之前的一次睡眠。無論你是在晚上或白天睡覺，都可以記錄。',
-              style: TextStyle(
-                fontFamily: 'SF Pro Text',
-                fontSize: 15,
-                color: CupertinoColors.systemGrey,
+            );
+          }).toList(),
+        ],
+      ],
+    );
+  }
+
+  Widget _buildFinalAwakeningPage() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          '你最後是什麼時候醒來的？',
+          style: TextStyle(
+            fontFamily: 'SF Pro Display',
+            fontSize: 24,
+            fontWeight: FontWeight.bold,
+            color: CupertinoColors.label,
+          ),
+        ),
+        const SizedBox(height: 8),
+        const Text(
+          '選擇最後一次醒來的時間',
+          style: TextStyle(
+            fontFamily: 'SF Pro Text',
+            fontSize: 17,
+            color: CupertinoColors.systemGrey,
+          ),
+        ),
+        const SizedBox(height: 24),
+        _buildTimeField(
+          label: '最後醒來時間',
+          time: _finalAwakeningTime,
+          onTimeSelected: (time) => setState(() => _finalAwakeningTime = time),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildTimeInBedAfterWakingPage() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          '醒來後你在床上待了多久？',
+          style: TextStyle(
+            fontFamily: 'SF Pro Display',
+            fontSize: 24,
+            fontWeight: FontWeight.bold,
+            color: CupertinoColors.label,
+          ),
+        ),
+        const SizedBox(height: 8),
+        const Text(
+          '從最後一次醒來到起床下床的時間',
+          style: TextStyle(
+            fontFamily: 'SF Pro Text',
+            fontSize: 17,
+            color: CupertinoColors.systemGrey,
+          ),
+        ),
+        const SizedBox(height: 24),
+        _buildNumberInput(
+          title: '躺床時間',
+          value: _timeInBedAfterWakingMinutes,
+          onChanged: (value) =>
+              setState(() => _timeInBedAfterWakingMinutes = value),
+          suffix: '分鐘',
+        ),
+      ],
+    );
+  }
+
+  Widget _buildSleepQualityPage() {
+    final qualities = [
+      {'value': 4.0, 'label': '很棒', 'subtext': '精力充沛、煥然一新', 'emoji': '😊'},
+      {'value': 3.0, 'label': '好', 'subtext': '獲得休息、清醒', 'emoji': '🙂'},
+      {'value': 2.0, 'label': '普通', 'subtext': '沒什麼差別、一般', 'emoji': '😐'},
+      {'value': 1.0, 'label': '不好', 'subtext': '疲憊、昏沉、想睡覺', 'emoji': '😞'},
+    ];
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'Q17 醒來後，感覺精神與心情如何？',
+          style: TextStyle(
+            fontFamily: 'SF Pro Display',
+            fontSize: 24,
+            fontWeight: FontWeight.bold,
+            color: CupertinoColors.label,
+          ),
+        ),
+        const SizedBox(height: 8),
+        const Text(
+          'Q17',
+          style: TextStyle(
+            fontFamily: 'SF Pro Text',
+            fontSize: 17,
+            color: CupertinoColors.systemGrey,
+          ),
+        ),
+        const SizedBox(height: 32),
+        ...qualities.map((quality) {
+          final isSelected = _sleepQuality == quality['value'];
+          return GestureDetector(
+            onTap: () =>
+                setState(() => _sleepQuality = quality['value'] as double),
+            child: Container(
+              margin: const EdgeInsets.only(bottom: 12),
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: isSelected
+                    ? const Color(0xFFFF9500)
+                    : CupertinoColors.systemBackground,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: isSelected
+                      ? const Color(0xFFFF9500)
+                      : CupertinoColors.systemGrey4,
+                  width: 1,
+                ),
+              ),
+              child: Row(
+                children: [
+                  Text(
+                    quality['emoji'] as String,
+                    style: const TextStyle(fontSize: 32),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          quality['label'] as String,
+                          style: TextStyle(
+                            fontFamily: 'SF Pro Text',
+                            fontSize: 17,
+                            fontWeight: FontWeight.w600,
+                            color: isSelected
+                                ? CupertinoColors.white
+                                : CupertinoColors.label,
+                          ),
+                        ),
+                        Text(
+                          quality['subtext'] as String,
+                          style: TextStyle(
+                            fontFamily: 'SF Pro Text',
+                            fontSize: 15,
+                            color: isSelected
+                                ? CupertinoColors.white.withOpacity(0.8)
+                                : CupertinoColors.systemGrey,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
               ),
             ),
-          ],
-        ),
-      ),
+          );
+        }).toList(),
+      ],
     );
   }
 
@@ -339,173 +828,74 @@ class _SleepDiaryEntryScreenState extends State<SleepDiaryEntryScreen> {
     );
   }
 
-  Widget _buildStepIndicator() {
-    return Container(
-      padding: const EdgeInsets.symmetric(vertical: 8),
-      decoration: const BoxDecoration(
-        border: Border(
-          bottom: BorderSide(
-            color: CupertinoColors.systemGrey5,
-            width: 1,
-          ),
-        ),
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          for (int i = 0; i < 3; i++) ...[
-            if (i > 0)
-              Container(
-                width: 24,
-                height: 1,
-                color: i <= _currentStep
-                    ? CupertinoColors.activeBlue
-                    : CupertinoColors.systemGrey4,
-              ),
-            Container(
-              width: 8,
-              height: 8,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: i == _currentStep
-                    ? CupertinoColors.activeBlue
-                    : i < _currentStep
-                        ? CupertinoColors.activeBlue
-                        : CupertinoColors.systemGrey4,
-              ),
-            ),
-          ],
-        ],
-      ),
-    );
-  }
-
-  Widget _buildCurrentStep() {
-    switch (_currentStep) {
-      case 0:
-        return _buildBasicSleepInfo();
-      case 1:
-        return _buildConsumptionEvents();
-      case 2:
-        return _buildTagsAndNotes();
-      default:
-        return const SizedBox.shrink();
-    }
-  }
-
-  Widget _buildBasicSleepInfo() {
+  Widget _buildNumberInput({
+    required String title,
+    required int value,
+    required ValueChanged<int> onChanged,
+    required String suffix,
+  }) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _buildTimeField(
-          label: '就寢時間',
-          time: _bedTime,
-          onTimeSelected: (time) => setState(() => _bedTime = time),
-        ),
-        const SizedBox(height: 24),
-        _buildNumberInput(
-          title: '入睡時間（分鐘）',
-          value: _timeToFallAsleepMinutes,
-          onChanged: (value) =>
-              setState(() => _timeToFallAsleepMinutes = value),
-        ),
-        const SizedBox(height: 24),
-        _buildNumberInput(
-          title: '醒來次數',
-          value: _numberOfAwakenings,
-          onChanged: (value) {
-            setState(() {
-              _numberOfAwakenings = value;
-              while (_wakeUpEvents.length < value) {
-                _addWakeUpEvent();
-              }
-              while (_wakeUpEvents.length > value) {
-                _wakeUpEvents.removeLast();
-              }
-            });
-          },
-        ),
-        if (_numberOfAwakenings > 0) ...[
-          const SizedBox(height: 24),
-          ..._wakeUpEvents.map(_buildWakeUpEventItem),
-        ],
-        const SizedBox(height: 24),
-        _buildTimeField(
-          label: '最後醒來時間',
-          time: _finalAwakeningTime,
-          onTimeSelected: (time) => setState(() => _finalAwakeningTime = time),
-        ),
-        const SizedBox(height: 24),
-        _buildTimeField(
-          label: '起床時間',
-          time: _outOfBedTime,
-          onTimeSelected: (time) => setState(() => _outOfBedTime = time),
-        ),
-        const SizedBox(height: 32),
-        _buildQualitySection(),
-      ],
-    );
-  }
-
-  Widget _buildQualitySection() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text(
-          '睡眠品質',
-          style: TextStyle(
+        Text(
+          title,
+          style: const TextStyle(
             fontFamily: 'SF Pro Text',
             fontSize: 17,
             fontWeight: FontWeight.w600,
             color: CupertinoColors.systemGrey,
           ),
         ),
-        const SizedBox(height: 16),
-        _buildQualityPicker(),
+        const SizedBox(height: 8),
+        Container(
+          decoration: BoxDecoration(
+            color: CupertinoColors.systemBackground,
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(
+              color: CupertinoColors.systemGrey5,
+              width: 1,
+            ),
+          ),
+          child: Row(
+            children: [
+              CupertinoButton(
+                padding: const EdgeInsets.all(12),
+                onPressed: value > 0 ? () => onChanged(value - 1) : null,
+                child: Icon(
+                  CupertinoIcons.minus,
+                  color: value > 0
+                      ? CupertinoColors.activeBlue
+                      : CupertinoColors.systemGrey3,
+                ),
+              ),
+              Expanded(
+                child: Text(
+                  '$value $suffix',
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    fontFamily: 'SF Pro Display',
+                    fontSize: 20,
+                    fontWeight: FontWeight.w500,
+                    color: CupertinoColors.label,
+                  ),
+                ),
+              ),
+              CupertinoButton(
+                padding: const EdgeInsets.all(12),
+                onPressed: () => onChanged(value + 1),
+                child: const Icon(
+                  CupertinoIcons.plus,
+                  color: CupertinoColors.activeBlue,
+                ),
+              ),
+            ],
+          ),
+        ),
       ],
     );
   }
 
-  Widget _buildQualityPicker() {
-    final qualities = [
-      {'value': 0.0, 'label': '很差'},
-      {'value': 1.0, 'label': '差'},
-      {'value': 2.0, 'label': '普通'},
-      {'value': 3.0, 'label': '好'},
-      {'value': 4.0, 'label': '很好'},
-      {'value': 5.0, 'label': '極好'},
-    ];
-
-    return Container(
-      decoration: BoxDecoration(
-        color: CupertinoColors.systemBackground,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(
-          color: CupertinoColors.systemGrey5,
-          width: 1,
-        ),
-      ),
-      child: CupertinoSegmentedControl<double>(
-        children: {
-          for (var quality in qualities)
-            quality['value'] as double: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              child: Text(
-                quality['label'] as String,
-                style: const TextStyle(
-                  fontFamily: 'SF Pro Text',
-                  fontSize: 15,
-                ),
-              ),
-            ),
-        },
-        groupValue: _sleepQuality,
-        onValueChanged: (value) => setState(() => _sleepQuality = value),
-      ),
-    );
-  }
-
-  Widget _buildConsumptionEvents() {
+  Widget _buildConsumptionEventsPage() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -580,7 +970,7 @@ class _SleepDiaryEntryScreenState extends State<SleepDiaryEntryScreen> {
     );
   }
 
-  Widget _buildTagsAndNotes() {
+  Widget _buildTagsPage() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -609,17 +999,13 @@ class _SleepDiaryEntryScreenState extends State<SleepDiaryEntryScreen> {
     );
   }
 
-  Widget _buildNumberInput({
-    required String title,
-    required int value,
-    required ValueChanged<int> onChanged,
-  }) {
+  Widget _buildNotesSection() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          title,
-          style: const TextStyle(
+        const Text(
+          '備註',
+          style: TextStyle(
             fontFamily: 'SF Pro Text',
             fontSize: 17,
             fontWeight: FontWeight.w600,
@@ -636,114 +1022,23 @@ class _SleepDiaryEntryScreenState extends State<SleepDiaryEntryScreen> {
               width: 1,
             ),
           ),
-          child: Row(
-            children: [
-              CupertinoButton(
-                padding: const EdgeInsets.all(12),
-                onPressed: value > 0 ? () => onChanged(value - 1) : null,
-                child: Icon(
-                  CupertinoIcons.minus,
-                  color: value > 0
-                      ? CupertinoColors.activeBlue
-                      : CupertinoColors.systemGrey3,
-                ),
-              ),
-              Expanded(
-                child: Text(
-                  value.toString(),
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(
-                    fontFamily: 'SF Pro Display',
-                    fontSize: 20,
-                    fontWeight: FontWeight.w500,
-                    color: CupertinoColors.label,
-                  ),
-                ),
-              ),
-              CupertinoButton(
-                padding: const EdgeInsets.all(12),
-                onPressed: () => onChanged(value + 1),
-                child: const Icon(
-                  CupertinoIcons.plus,
-                  color: CupertinoColors.activeBlue,
-                ),
-              ),
-            ],
+          child: CupertinoTextField(
+            controller: _notesController,
+            placeholder: '添加備註...',
+            padding: const EdgeInsets.all(12),
+            maxLines: 4,
+            style: const TextStyle(
+              fontFamily: 'SF Pro Text',
+              fontSize: 17,
+            ),
+            placeholderStyle: const TextStyle(
+              fontFamily: 'SF Pro Text',
+              fontSize: 17,
+              color: CupertinoColors.systemGrey,
+            ),
+            decoration: null,
           ),
         ),
-      ],
-    );
-  }
-
-  Widget _buildConsumptionEventSection({
-    required String title,
-    required ConsumptionEvent? event,
-    required ValueChanged<ConsumptionEvent?> onChanged,
-  }) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            Text(
-              title,
-              style: const TextStyle(
-                fontFamily: 'SF Pro Text',
-                fontSize: 17,
-                fontWeight: FontWeight.w600,
-                color: CupertinoColors.systemGrey,
-              ),
-            ),
-            const Spacer(),
-            CupertinoSwitch(
-              value: event != null,
-              onChanged: (value) {
-                if (value) {
-                  onChanged(ConsumptionEvent(
-                    time: DateTime.now(),
-                    details: null,
-                  ));
-                } else {
-                  onChanged(null);
-                }
-              },
-            ),
-          ],
-        ),
-        if (event != null) ...[
-          const SizedBox(height: 16),
-          _buildTimeField(
-            label: '時間',
-            time: event.time,
-            onTimeSelected: (time) => onChanged(ConsumptionEvent(
-              time: time,
-              details: event.details,
-            )),
-          ),
-          const SizedBox(height: 16),
-          Container(
-            decoration: BoxDecoration(
-              color: CupertinoColors.systemBackground,
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(
-                color: CupertinoColors.systemGrey5,
-                width: 1,
-              ),
-            ),
-            child: CupertinoTextField(
-              placeholder: '備註（選填）',
-              padding: const EdgeInsets.all(12),
-              onChanged: (value) => onChanged(ConsumptionEvent(
-                time: event.time,
-                details: value.isEmpty ? null : value,
-              )),
-              style: const TextStyle(
-                fontFamily: 'SF Pro Text',
-                fontSize: 17,
-              ),
-            ),
-          ),
-        ],
       ],
     );
   }
@@ -887,20 +1182,102 @@ class _SleepDiaryEntryScreenState extends State<SleepDiaryEntryScreen> {
     }
   }
 
-  Widget _buildNotesSection() {
+  Widget _buildConsumptionEventSection({
+    required String title,
+    required ConsumptionEvent? event,
+    required ValueChanged<ConsumptionEvent?> onChanged,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Text(
+              title,
+              style: const TextStyle(
+                fontFamily: 'SF Pro Text',
+                fontSize: 17,
+                fontWeight: FontWeight.w600,
+                color: CupertinoColors.systemGrey,
+              ),
+            ),
+            const Spacer(),
+            CupertinoSwitch(
+              value: event != null,
+              onChanged: (value) {
+                if (value) {
+                  onChanged(ConsumptionEvent(
+                    time: DateTime.now(),
+                    details: null,
+                  ));
+                } else {
+                  onChanged(null);
+                }
+              },
+            ),
+          ],
+        ),
+        if (event != null) ...[
+          const SizedBox(height: 16),
+          _buildTimeField(
+            label: '時間',
+            time: event.time,
+            onTimeSelected: (time) => onChanged(ConsumptionEvent(
+              time: time,
+              details: event.details,
+            )),
+          ),
+          const SizedBox(height: 16),
+          Container(
+            decoration: BoxDecoration(
+              color: CupertinoColors.systemBackground,
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(
+                color: CupertinoColors.systemGrey5,
+                width: 1,
+              ),
+            ),
+            child: CupertinoTextField(
+              placeholder: '備註（選填）',
+              padding: const EdgeInsets.all(12),
+              onChanged: (value) => onChanged(ConsumptionEvent(
+                time: event.time,
+                details: value.isEmpty ? null : value,
+              )),
+              style: const TextStyle(
+                fontFamily: 'SF Pro Text',
+                fontSize: 17,
+              ),
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+
+  Widget _buildNotesPage() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const Text(
-          '備註',
+          '有什麼想記錄的嗎？',
           style: TextStyle(
-            fontFamily: 'SF Pro Text',
-            fontSize: 17,
-            fontWeight: FontWeight.w600,
-            color: CupertinoColors.systemGrey,
+            fontFamily: 'SF Pro Display',
+            fontSize: 24,
+            fontWeight: FontWeight.bold,
+            color: CupertinoColors.label,
           ),
         ),
         const SizedBox(height: 8),
+        const Text(
+          '記錄任何可能影響你睡眠的事情',
+          style: TextStyle(
+            fontFamily: 'SF Pro Text',
+            fontSize: 17,
+            color: CupertinoColors.systemGrey,
+          ),
+        ),
+        const SizedBox(height: 24),
         Container(
           decoration: BoxDecoration(
             color: CupertinoColors.systemBackground,
@@ -928,151 +1305,6 @@ class _SleepDiaryEntryScreenState extends State<SleepDiaryEntryScreen> {
           ),
         ),
       ],
-    );
-  }
-
-  Widget _buildWakeUpEventItem(WakeUpEvent event) {
-    final index = _wakeUpEvents.indexOf(event);
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          '第 ${index + 1} 次醒來',
-          style: const TextStyle(
-            fontFamily: 'SF Pro Text',
-            fontSize: 17,
-            fontWeight: FontWeight.w600,
-            color: CupertinoColors.systemGrey,
-          ),
-        ),
-        const SizedBox(height: 8),
-        _buildTimeField(
-          label: '醒來時間',
-          time: event.time,
-          onTimeSelected: (time) => _updateWakeUpEvent(
-            index,
-            WakeUpEvent(
-              time: time,
-              gotOutOfBed: event.gotOutOfBed,
-              outOfBedDurationMinutes: event.outOfBedDurationMinutes,
-              stayedInBedMinutes: event.stayedInBedMinutes,
-            ),
-          ),
-        ),
-        const SizedBox(height: 8),
-        Row(
-          children: [
-            CupertinoSwitch(
-              value: event.gotOutOfBed,
-              onChanged: (value) => _updateWakeUpEvent(
-                index,
-                WakeUpEvent(
-                  time: event.time,
-                  gotOutOfBed: value,
-                  outOfBedDurationMinutes:
-                      value ? event.outOfBedDurationMinutes : null,
-                  stayedInBedMinutes: event.stayedInBedMinutes,
-                ),
-              ),
-            ),
-            const SizedBox(width: 8),
-            const Text(
-              '是否下床',
-              style: TextStyle(
-                fontFamily: 'SF Pro Text',
-                fontSize: 17,
-              ),
-            ),
-          ],
-        ),
-        if (event.gotOutOfBed) ...[
-          const SizedBox(height: 8),
-          _buildNumberInput(
-            title: '下床時間（分鐘）',
-            value: event.outOfBedDurationMinutes ?? 0,
-            onChanged: (value) => _updateWakeUpEvent(
-              index,
-              WakeUpEvent(
-                time: event.time,
-                gotOutOfBed: event.gotOutOfBed,
-                outOfBedDurationMinutes: value,
-                stayedInBedMinutes: event.stayedInBedMinutes,
-              ),
-            ),
-          ),
-        ],
-        const SizedBox(height: 8),
-        _buildNumberInput(
-          title: '躺床時間（分鐘）',
-          value: event.stayedInBedMinutes,
-          onChanged: (value) => _updateWakeUpEvent(
-            index,
-            WakeUpEvent(
-              time: event.time,
-              gotOutOfBed: event.gotOutOfBed,
-              outOfBedDurationMinutes: event.outOfBedDurationMinutes,
-              stayedInBedMinutes: value,
-            ),
-          ),
-        ),
-        const SizedBox(height: 16),
-        Container(
-          height: 1,
-          color: CupertinoColors.systemGrey5,
-        ),
-        const SizedBox(height: 16),
-      ],
-    );
-  }
-
-  Widget _buildNavigationButtons() {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: const BoxDecoration(
-        border: Border(
-          top: BorderSide(
-            color: CupertinoColors.systemGrey5,
-            width: 1,
-          ),
-        ),
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          if (_currentStep > 0)
-            CupertinoButton(
-              padding: EdgeInsets.zero,
-              onPressed: () {
-                setState(() {
-                  _currentStep--;
-                });
-              },
-              child: const Text('上一步'),
-            )
-          else
-            const SizedBox(width: 60),
-          Text(
-            '${_currentStep + 1}/3',
-            style: const TextStyle(
-              fontFamily: 'SF Pro Text',
-              fontSize: 15,
-              color: CupertinoColors.systemGrey,
-            ),
-          ),
-          if (_currentStep < 2)
-            CupertinoButton(
-              padding: EdgeInsets.zero,
-              onPressed: () {
-                setState(() {
-                  _currentStep++;
-                });
-              },
-              child: const Text('下一步'),
-            )
-          else
-            const SizedBox(width: 60),
-        ],
-      ),
     );
   }
 }

@@ -9,7 +9,7 @@ class SleepDiaryEntry {
   final int numberOfAwakenings;
   final List<WakeUpEvent> wakeUpEvents;
   final DateTime finalAwakeningTime;
-  final DateTime outOfBedTime;
+  final int timeInBedAfterWakingMinutes;
   final double sleepQuality; // 0.0 to 5.0
   final ConsumptionEvent? caffeineConsumption;
   final ConsumptionEvent? alcoholConsumption;
@@ -22,7 +22,10 @@ class SleepDiaryEntry {
   final DateTime createdAt;
 
   Duration get sleepDuration => wakeTime.difference(bedTime);
-  Duration get timeInBed => outOfBedTime.difference(bedTime);
+  Duration get timeInBed => Duration(
+      minutes: timeToFallAsleepMinutes +
+          sleepDuration.inMinutes +
+          timeInBedAfterWakingMinutes);
 
   const SleepDiaryEntry({
     required this.id,
@@ -33,7 +36,7 @@ class SleepDiaryEntry {
     required this.numberOfAwakenings,
     required this.wakeUpEvents,
     required this.finalAwakeningTime,
-    required this.outOfBedTime,
+    required this.timeInBedAfterWakingMinutes,
     required this.sleepQuality,
     this.caffeineConsumption,
     this.alcoholConsumption,
@@ -55,7 +58,7 @@ class SleepDiaryEntry {
     required int numberOfAwakenings,
     required List<WakeUpEvent> wakeUpEvents,
     required DateTime finalAwakeningTime,
-    required DateTime outOfBedTime,
+    required int timeInBedAfterWakingMinutes,
     required double sleepQuality,
     ConsumptionEvent? caffeineConsumption,
     ConsumptionEvent? alcoholConsumption,
@@ -75,7 +78,7 @@ class SleepDiaryEntry {
       numberOfAwakenings: numberOfAwakenings,
       wakeUpEvents: wakeUpEvents,
       finalAwakeningTime: finalAwakeningTime,
-      outOfBedTime: outOfBedTime,
+      timeInBedAfterWakingMinutes: timeInBedAfterWakingMinutes,
       sleepQuality: sleepQuality,
       caffeineConsumption: caffeineConsumption,
       alcoholConsumption: alcoholConsumption,
@@ -100,7 +103,7 @@ class SleepDiaryEntry {
       'numberOfAwakenings': numberOfAwakenings,
       'wakeUpEvents': wakeUpEvents.map((e) => e.toMap()).toList(),
       'finalAwakeningTime': Timestamp.fromDate(finalAwakeningTime),
-      'outOfBedTime': Timestamp.fromDate(outOfBedTime),
+      'timeInBedAfterWakingMinutes': timeInBedAfterWakingMinutes,
       'sleepQuality': sleepQuality,
       'caffeineConsumption': caffeineConsumption?.toMap(),
       'alcoholConsumption': alcoholConsumption?.toMap(),
@@ -127,7 +130,7 @@ class SleepDiaryEntry {
           .map((e) => WakeUpEvent.fromMap(e as Map<String, dynamic>))
           .toList(),
       finalAwakeningTime: (map['finalAwakeningTime'] as Timestamp).toDate(),
-      outOfBedTime: (map['outOfBedTime'] as Timestamp).toDate(),
+      timeInBedAfterWakingMinutes: map['timeInBedAfterWakingMinutes'] as int,
       sleepQuality: (map['sleepQuality'] as num).toDouble(),
       caffeineConsumption: map['caffeineConsumption'] != null
           ? ConsumptionEvent.fromMap(
@@ -169,7 +172,7 @@ class SleepDiaryEntry {
     int? numberOfAwakenings,
     List<WakeUpEvent>? wakeUpEvents,
     DateTime? finalAwakeningTime,
-    DateTime? outOfBedTime,
+    int? timeInBedAfterWakingMinutes,
     double? sleepQuality,
     ConsumptionEvent? caffeineConsumption,
     ConsumptionEvent? alcoholConsumption,
@@ -191,7 +194,8 @@ class SleepDiaryEntry {
       numberOfAwakenings: numberOfAwakenings ?? this.numberOfAwakenings,
       wakeUpEvents: wakeUpEvents ?? this.wakeUpEvents,
       finalAwakeningTime: finalAwakeningTime ?? this.finalAwakeningTime,
-      outOfBedTime: outOfBedTime ?? this.outOfBedTime,
+      timeInBedAfterWakingMinutes:
+          timeInBedAfterWakingMinutes ?? this.timeInBedAfterWakingMinutes,
       sleepQuality: sleepQuality ?? this.sleepQuality,
       caffeineConsumption: caffeineConsumption ?? this.caffeineConsumption,
       alcoholConsumption: alcoholConsumption ?? this.alcoholConsumption,
