@@ -96,65 +96,97 @@ Subscription model with advertisements
 Freemium (basic features are free, advanced features are paid)
 
 Modular Task Chunks for dCBT-i Mobile App Development
-1. Project Setup & Tooling
-Initialize Flutter project (with null safety, iOS/Android support)
-Set up GitHub repository and .gitignore
+1. Project Setup & Tooling (done)
+Initialize Flutter project (with null safety, iOS/Android support) (done)
+Set up GitHub repository and .gitignore (done)
+
 Configure CI/CD (GitHub Actions or Codemagic)
 Set up project structure for modularity (feature folders, shared, core, etc.)
+
 2. Core Infrastructure
 Integrate Firebase into Flutter (Auth, Firestore, Messaging, Analytics)
 Set up environment configuration (dev/prod, secrets management)
 Implement localization (Traditional Chinese support)
+
 3. Authentication Module
 Email/password sign-up, login, logout
 Password reset flow
 Authentication state management (provider, bloc, or riverpod)
 User profile basic setup
+
 4. Sleep Diary Module
-Data models for diary entries
-UI for daily entry (sleep/wake time, quality rating)
+Data models for diary entries (do this)
+UI for daily entry (do this)
+- date of the entry
+- what time did you get into bed?
+- quality rating
+- how long did it take you to fall asleep?
+- how many times did you wake up, not counting your final awakening?
+- for each time you woke up (if happened), what time did you wake up?
+- for each time you woke up (if happened), did you get out of bed? if yes, for how long?
+- for each time you woke up (if happened), how long did you stay in bed?
+- what time was your final awakening?
+- what time did you get out of bed for the day?
+- during the previous day (between sleeping periods) did you consume caffeine (coffee, tea, energy drinks)? if yes, at what time?
+- during the previous day (between sleeping periods) did you consume alcohol? if yes, at what time?
+- during the previous day (between sleeping periods) did you take sleep medicines? if yes, at what time?
+- during the previous day (between sleeping periods) did you smoke? if yes, at what time?
+- during the previous day (between sleeping periods) did you exercise? if yes, at what time?
+- during the previous day (between sleeping periods) when did you have your last meal or night snacks?
+- select all tags that were relevant to your sleep: daytime activities (exercise, nap longer than 30 min, sunlight within 30 min of waking, yoga, caffeine after 12pm), bedtime activities (stretching, meditation, reading, eat within 3 hours of bed, journaling, alcohol within 3 hours of bed, shower, worked late, socialized late, screen time within 1 hour of bed, CAPA therapy), bedtime substances (sleeping pills, melatonin, supplements/herbs, CBD/THC, nicotine/tobacco, other medications), sleep distrubance (stress/racing thoughts, nightmares, light, noises, temperature, snoring, woke for bathroom, kids/partner/pets, travel/jet lag, pain/illness/injury)
 CRUD operations with Firestore
 List/history view of diary entries
+
 5. Assessment Module
 Data models for ISI, PSQI, depression/anxiety
 UI for each assessment (questionnaire forms)
 Submission and result storage in Firestore
 Assessment history and result visualization
+
 6. Push Notifications Module
 Integrate Firebase Cloud Messaging
 Implement notification scheduling (customizable times)
 UI for notification preferences/settings
+
 7. Educational Modules (Post-MVP, but structure early)
 Modular content delivery (CBT-i lessons, articles)
 UI for module navigation and content display
 Progress tracking
+
 8. Sleep Data Analysis Module
 Data aggregation and calculation logic
 Visualization widgets (charts, graphs)
 Insights and feedback UI
+
 9. Gamification Module
 Badge and streak logic
 UI for achievements and progress
 Notification triggers for milestones
+
 10. Payments Module
 Integrate Stripe via Firebase Extensions
 UI for subscription management and purchase flow
 Handle payment status and access control
+
 11. Legal & Compliance Module
 In-app Privacy Policy and Terms of Service screens
 Implement Firebase Security Rules
 Data encryption and secure storage practices
+
 12. Analytics & Performance
 Integrate Firebase Analytics events
 Set up Crashlytics and Performance Monitoring
+
 13. Testing & QA
 Write integration and widget tests (using integration_test)
 Set up test data and mock services
 User Acceptance Testing scripts
+
 14. Deployment & Distribution
 Prepare app for App Store and Play Store (icons, splash, metadata)
 Build and test release versions
 Submit for review
+
 15. Maintenance & Feedback
 Weekly update workflow
 In-app feedback collection (optional, for future)
