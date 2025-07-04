@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'features/sleep_diary/screens/sleep_diary_entry_screen.dart';
+import 'firebase_options.dart';
 
 void main() async {
   try {
@@ -11,7 +12,9 @@ void main() async {
     print('[main] Flutter binding initialized');
 
     try {
-      await Firebase.initializeApp();
+      await Firebase.initializeApp(
+        options: DefaultFirebaseOptions.currentPlatform,
+      );
       print('[main] Firebase initialized successfully');
     } catch (e) {
       print('[main] Firebase initialization failed: $e');
