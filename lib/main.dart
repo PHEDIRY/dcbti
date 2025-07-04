@@ -1,4 +1,5 @@
 import 'package:flutter/cupertino.dart';
+import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'features/sleep_diary/screens/sleep_diary_entry_screen.dart';
@@ -39,19 +40,29 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // [MyApp.build] Building CupertinoApp with SF Pro font
-    return const CupertinoApp(
+    // [MyApp.build] Building app with proper Material and Cupertino support
+    return MaterialApp(
       title: 'Digital CBT-i',
-      theme: CupertinoThemeData(
-        primaryColor: CupertinoColors.systemBlue,
-        textTheme: CupertinoTextThemeData(
-          textStyle: TextStyle(
-            fontFamily: 'SF Pro Text',
-          ),
+      debugShowCheckedModeBanner: false,
+      theme: ThemeData(
+        useMaterial3: true,
+        // This ensures Material icons are available
+        iconTheme: const IconThemeData(
+          color: CupertinoColors.systemBlue,
         ),
       ),
-      home: HomePage(),
-      debugShowCheckedModeBanner: false,
+      home: CupertinoApp(
+        theme: const CupertinoThemeData(
+          primaryColor: CupertinoColors.systemBlue,
+          textTheme: CupertinoTextThemeData(
+            textStyle: TextStyle(
+              fontFamily: 'SF Pro Text',
+            ),
+          ),
+        ),
+        home: const HomePage(),
+        debugShowCheckedModeBanner: false,
+      ),
     );
   }
 }
@@ -162,10 +173,13 @@ class HomePage extends StatelessWidget {
         ),
         child: Row(
           children: [
-            Icon(
-              icon,
-              color: CupertinoTheme.of(context).primaryColor,
-              size: 28,
+            Material(
+              type: MaterialType.transparency,
+              child: Icon(
+                icon,
+                color: CupertinoTheme.of(context).primaryColor,
+                size: 28,
+              ),
             ),
             const SizedBox(width: 12),
             Text(
@@ -178,9 +192,12 @@ class HomePage extends StatelessWidget {
               ),
             ),
             const Spacer(),
-            const Icon(
-              CupertinoIcons.chevron_right,
-              color: CupertinoColors.systemGrey2,
+            Material(
+              type: MaterialType.transparency,
+              child: Icon(
+                CupertinoIcons.chevron_right,
+                color: CupertinoColors.systemGrey2,
+              ),
             ),
           ],
         ),

@@ -1,5 +1,5 @@
 import 'package:flutter/cupertino.dart';
-import 'package:flutter/material.dart' show Divider;
+import 'package:flutter/material.dart';
 import '../../../core/models/sleep_diary_entry.dart';
 import 'package:intl/intl.dart';
 
@@ -14,20 +14,43 @@ class _SleepDiaryEntryScreenState extends State<SleepDiaryEntryScreen> {
   int _currentStep = 0;
 
   // Basic sleep info
-  DateTime _bedTime = DateTime.now().subtract(const Duration(hours: 8));
+  late DateTime _bedTime;
+  late DateTime _finalAwakeningTime;
+
+  @override
+  void initState() {
+    super.initState();
+    // Set default times using DateTime.now() as base to ensure correct date
+    final now = DateTime.now();
+    _bedTime = DateTime(
+      now.year,
+      now.month,
+      now.day,
+      23, // 23:00 default
+      0,
+    );
+    _finalAwakeningTime = DateTime(
+      now.year,
+      now.month,
+      now.day,
+      7, // 07:00 default
+      0,
+    );
+  }
+
+  // Other state variables
   int _timeToFallAsleepHours = 0;
-  int _timeToFallAsleepMinutes = 15;
+  int _timeToFallAsleepMinutes = 0;
   int _initialOutOfBedHours = 0;
   int _initialOutOfBedMinutes = 0;
   String? _sleepDifficultyReason;
   int _numberOfAwakenings = 0;
   final List<WakeUpEvent> _wakeUpEvents = [];
   String? _wakeUpDifficultyReason;
-  DateTime _finalAwakeningTime = DateTime.now();
-  bool _immediateWakeUp = false;
+  bool? _immediateWakeUp;
   int _timeInBedAfterWakingHours = 0;
   int _timeInBedAfterWakingMinutes = 0;
-  double _sleepQuality = 3.0;
+  double? _sleepQuality;
 
   // Quality and notes
   final TextEditingController _notesController = TextEditingController();
@@ -188,7 +211,7 @@ class _SleepDiaryEntryScreenState extends State<SleepDiaryEntryScreen> {
       finalAwakeningTime: _finalAwakeningTime,
       timeInBedAfterWakingMinutes:
           _timeInBedAfterWakingHours * 60 + _timeInBedAfterWakingMinutes,
-      sleepQuality: _sleepQuality,
+      sleepQuality: _sleepQuality ?? 0.0,
       caffeineConsumption: _caffeineConsumption,
       alcoholConsumption: _alcoholConsumption,
       sleepMedicineConsumption: _sleepMedicineConsumption,
@@ -199,7 +222,7 @@ class _SleepDiaryEntryScreenState extends State<SleepDiaryEntryScreen> {
       notes: _notesController.text.isEmpty ? null : _notesController.text,
       sleepDifficultyReason: _sleepDifficultyReason,
       wakeUpDifficultyReason: _wakeUpDifficultyReason,
-      immediateWakeUp: _immediateWakeUp,
+      immediateWakeUp: _immediateWakeUp ?? false,
       initialOutOfBedDurationMinutes:
           _initialOutOfBedHours * 60 + _initialOutOfBedMinutes,
     );
@@ -209,11 +232,33 @@ class _SleepDiaryEntryScreenState extends State<SleepDiaryEntryScreen> {
 
   void _addWakeUpEvent() {
     setState(() {
+      DateTime wakeTime;
+      if (_wakeUpEvents.isEmpty) {
+        // First wake-up: 2 hours after bedtime as default
+        wakeTime = DateTime(
+          _bedTime.year,
+          _bedTime.month,
+          _bedTime.day,
+          (_bedTime.hour + 2) % 24,
+          _bedTime.minute,
+        );
+      } else {
+        // Subsequent wake-ups: 2 hours after previous wake-up
+        final lastEvent = _wakeUpEvents.last;
+        wakeTime = DateTime(
+          lastEvent.time.year,
+          lastEvent.time.month,
+          lastEvent.time.day,
+          (lastEvent.time.hour + 2) % 24,
+          lastEvent.time.minute,
+        );
+      }
+
       _wakeUpEvents.add(
         WakeUpEvent(
-          time: DateTime.now(),
+          time: wakeTime,
           gotOutOfBed: false,
-          stayedInBedMinutes: 15,
+          stayedInBedMinutes: 5, // Changed from 15 to 5 minutes
         ),
       );
     });
@@ -233,7 +278,7 @@ class _SleepDiaryEntryScreenState extends State<SleepDiaryEntryScreen> {
   }
 
   void _showCloseConfirmation() {
-    showCupertinoDialog<void>(
+    showCupertinoDialog<bool>(
       context: context,
       builder: (BuildContext context) => CupertinoAlertDialog(
         title: const Text(
@@ -253,21 +298,25 @@ class _SleepDiaryEntryScreenState extends State<SleepDiaryEntryScreen> {
           CupertinoDialogAction(
             isDefaultAction: true,
             onPressed: () {
-              Navigator.pop(context); // Close dialog
+              Navigator.pop(context, false); // Close dialog and return false
             },
             child: const Text('取消'),
           ),
           CupertinoDialogAction(
             isDestructiveAction: true,
             onPressed: () {
-              Navigator.pop(context); // Close dialog
-              Navigator.pop(context); // Close entry form
+              Navigator.pop(context, true); // Close dialog and return true
             },
             child: const Text('離開'),
           ),
         ],
       ),
-    );
+    ).then((shouldPop) {
+      if (shouldPop ?? false) {
+        // Only pop the screen if user confirmed
+        Navigator.of(context).pop();
+      }
+    });
   }
 
   @override
@@ -287,7 +336,7 @@ class _SleepDiaryEntryScreenState extends State<SleepDiaryEntryScreen> {
               : () {
                   Navigator.of(context).pop();
                 },
-          child: const Icon(CupertinoIcons.back),
+          child: _wrapIcon(CupertinoIcons.back),
         ),
         middle: const Padding(
           padding: EdgeInsets.only(left: 8),
@@ -303,7 +352,7 @@ class _SleepDiaryEntryScreenState extends State<SleepDiaryEntryScreen> {
         trailing: CupertinoButton(
           padding: EdgeInsets.zero,
           onPressed: _showCloseConfirmation,
-          child: const Icon(CupertinoIcons.xmark),
+          child: _wrapIcon(CupertinoIcons.xmark),
         ),
       ),
       child: Container(
@@ -384,15 +433,6 @@ class _SleepDiaryEntryScreenState extends State<SleepDiaryEntryScreen> {
                 color: CupertinoColors.systemGrey,
               ),
             ),
-            const Spacer(),
-            Text(
-              '${((_currentStep + 1) / _pages.length * 100).round()}%',
-              style: const TextStyle(
-                fontFamily: 'SF Pro Text',
-                fontSize: 13,
-                color: CupertinoColors.systemGrey,
-              ),
-            ),
           ],
         ),
         const SizedBox(height: 6),
@@ -449,7 +489,14 @@ class _SleepDiaryEntryScreenState extends State<SleepDiaryEntryScreen> {
                 child: CupertinoButton.filled(
                   onPressed: () {
                     setState(() {
-                      _currentStep++;
+                      // --- Custom logic to skip Q9 if Q8 answer is '是' ---
+                      // Q8: Immediate wake up (index 7), Q9: Time in bed after waking (index 8)
+                      // If on Q8 and answer is '是', skip Q9 by incrementing by 2
+                      if (_currentStep == 7 && _immediateWakeUp == true) {
+                        _currentStep += 2;
+                      } else {
+                        _currentStep++;
+                      }
                     });
                   },
                   child: const Text('繼續'),
@@ -1236,7 +1283,7 @@ class _SleepDiaryEntryScreenState extends State<SleepDiaryEntryScreen> {
               CupertinoButton(
                 padding: const EdgeInsets.all(12),
                 onPressed: value > 0 ? () => onChanged(value - 1) : null,
-                child: Icon(
+                child: _wrapIcon(
                   CupertinoIcons.minus,
                   color: value > 0
                       ? CupertinoColors.activeBlue
@@ -1258,7 +1305,7 @@ class _SleepDiaryEntryScreenState extends State<SleepDiaryEntryScreen> {
               CupertinoButton(
                 padding: const EdgeInsets.all(12),
                 onPressed: () => onChanged(value + 1),
-                child: const Icon(
+                child: _wrapIcon(
                   CupertinoIcons.plus,
                   color: CupertinoColors.activeBlue,
                 ),
@@ -1267,6 +1314,17 @@ class _SleepDiaryEntryScreenState extends State<SleepDiaryEntryScreen> {
           ),
         ),
       ],
+    );
+  }
+
+  Widget _wrapIcon(IconData icon, {Color? color, double? size}) {
+    return Material(
+      type: MaterialType.transparency,
+      child: Icon(
+        icon,
+        color: color,
+        size: size,
+      ),
     );
   }
 
@@ -1695,6 +1753,12 @@ class _SleepDiaryEntryScreenState extends State<SleepDiaryEntryScreen> {
     required int minutes,
     required Function(int hours, int minutes) onChanged,
   }) {
+    // Always start at 0 unless user has picked a value
+    final hourController =
+        FixedExtentScrollController(initialItem: hours == 0 ? 0 : hours);
+    final minuteController =
+        FixedExtentScrollController(initialItem: minutes == 0 ? 0 : minutes);
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -1747,13 +1811,12 @@ class _SleepDiaryEntryScreenState extends State<SleepDiaryEntryScreen> {
                       width: 80,
                       height: 160,
                       child: CupertinoPicker(
+                        key: ValueKey('hourPicker_$title'),
                         selectionOverlay: null,
                         magnification: 1.1,
                         squeeze: 1.0,
                         itemExtent: 40,
-                        scrollController: FixedExtentScrollController(
-                          initialItem: hours,
-                        ),
+                        scrollController: hourController,
                         onSelectedItemChanged: (int value) {
                           onChanged(value, minutes);
                         },
@@ -1789,13 +1852,12 @@ class _SleepDiaryEntryScreenState extends State<SleepDiaryEntryScreen> {
                       width: 80,
                       height: 160,
                       child: CupertinoPicker(
+                        key: ValueKey('minutePicker_$title'),
                         selectionOverlay: null,
                         magnification: 1.1,
                         squeeze: 1.0,
                         itemExtent: 40,
-                        scrollController: FixedExtentScrollController(
-                          initialItem: minutes,
-                        ),
+                        scrollController: minuteController,
                         onSelectedItemChanged: (int value) {
                           onChanged(hours, value);
                         },
