@@ -17,17 +17,11 @@ import 'package:flutter/foundation.dart'
 class DefaultFirebaseOptions {
   static FirebaseOptions get currentPlatform {
     if (kIsWeb) {
-      throw UnsupportedError(
-        'DefaultFirebaseOptions have not been configured for web - '
-        'you can reconfigure this by running the FlutterFire CLI again.',
-      );
+      return web;
     }
     switch (defaultTargetPlatform) {
       case TargetPlatform.android:
-        throw UnsupportedError(
-          'DefaultFirebaseOptions have not been configured for android - '
-          'you can reconfigure this by running the FlutterFire CLI again.',
-        );
+        return android;
       case TargetPlatform.iOS:
         throw UnsupportedError(
           'DefaultFirebaseOptions have not been configured for ios - '
@@ -66,4 +60,22 @@ class DefaultFirebaseOptions {
     authDomain: 'dcbti-july2025.firebaseapp.com',
     storageBucket: 'dcbti-july2025.firebasestorage.app',
   );
+
+  static const FirebaseOptions android = FirebaseOptions(
+    apiKey: 'AIzaSyCK23veW4NaiKTCNuALpvZY8a9xkn9UWkc',
+    appId: '1:162284636876:android:a77e6833a4c036a2489069',
+    messagingSenderId: '162284636876',
+    projectId: 'dcbti-july2025',
+    storageBucket: 'dcbti-july2025.firebasestorage.app',
+  );
+
+  static const FirebaseOptions web = FirebaseOptions(
+    apiKey: 'AIzaSyAtuXzrCICaCcZx1MI6M_xG1_JC7QUnKpo',
+    appId: '1:162284636876:web:8ff4e2941728b35e489069',
+    messagingSenderId: '162284636876',
+    projectId: 'dcbti-july2025',
+    authDomain: 'dcbti-july2025.firebaseapp.com',
+    storageBucket: 'dcbti-july2025.firebasestorage.app',
+  );
+
 }

@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "162284636876",
+    "project_id": "dcbti-july2025",
+    "storage_bucket": "dcbti-july2025.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:162284636876:android:a77e6833a4c036a2489069",
+        "android_client_info": {
+          "package_name": "com.example.dcbti"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCK23veW4NaiKTCNuALpvZY8a9xkn9UWkc"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
