@@ -359,7 +359,7 @@ class _SleepDiaryEntryScreenState extends State<SleepDiaryEntryScreen> {
         WakeUpEvent(
           time: wakeTime,
           gotOutOfBed: false,
-          stayedInBedMinutes: 5, // Changed from 15 to 5 minutes
+          stayedInBedMinutes: 1, // Changed from 5 to 1 minutes as minimum
         ),
       );
     });
@@ -894,7 +894,7 @@ class _SleepDiaryEntryScreenState extends State<SleepDiaryEntryScreen> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const Text(
-          '中間有離開床舖嗎？',
+          '等待入睡期間，有離開床舖嗎？',
           style: TextStyle(
             fontFamily: 'SF Pro Display',
             fontSize: 24,
@@ -1135,6 +1135,7 @@ class _SleepDiaryEntryScreenState extends State<SleepDiaryEntryScreen> {
                         ),
                       ),
                       suffix: '分鐘',
+                      minValue: 1,
                     ),
                     const SizedBox(height: 16),
                     Row(
@@ -1275,8 +1276,8 @@ class _SleepDiaryEntryScreenState extends State<SleepDiaryEntryScreen> {
     final defaultTime =
         DateTime(now.year, now.month, now.day, 7, 0); // 07:00 current day
     return _buildTimePicker(
-      title: '你最後是什麼時候醒來的？',
-      subtitle: '選擇最後一次醒來的時間',
+      title: '什麼時候醒來 (起床時間)？',
+      subtitle: '選擇你最後一次醒來的時間 (之後起床活動)',
       time: _finalAwakeningTime,
       onChanged: (time) {
         setState(() {
