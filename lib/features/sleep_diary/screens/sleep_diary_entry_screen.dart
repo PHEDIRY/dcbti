@@ -684,12 +684,14 @@ class _SleepDiaryEntryScreenState extends State<SleepDiaryEntryScreen> {
           ),
         ),
         const SizedBox(height: 24),
-        const Text(
-          '選擇時間',
-          style: TextStyle(
-            fontFamily: 'SF Pro Text',
-            fontSize: 17,
-            color: CupertinoColors.systemGrey,
+        Center(
+          child: Text(
+            dateHint,
+            style: const TextStyle(
+              fontFamily: 'SF Pro Text',
+              fontSize: 17,
+              color: CupertinoColors.systemGrey,
+            ),
           ),
         ),
         const SizedBox(height: 16),
@@ -839,17 +841,6 @@ class _SleepDiaryEntryScreenState extends State<SleepDiaryEntryScreen> {
               ],
             ),
           ],
-        ),
-        const SizedBox(height: 16),
-        Center(
-          child: Text(
-            dateHint,
-            style: const TextStyle(
-              fontFamily: 'SF Pro Text',
-              fontSize: 17,
-              color: CupertinoColors.systemGrey,
-            ),
-          ),
         ),
         const SizedBox(height: 16),
       ],
@@ -1090,97 +1081,110 @@ class _SleepDiaryEntryScreenState extends State<SleepDiaryEntryScreen> {
           ..._wakeUpEvents.asMap().entries.map((entry) {
             final index = entry.key;
             final event = entry.value;
-            return Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  '第 ${index + 1} 次醒來',
-                  style: const TextStyle(
-                    fontFamily: 'SF Pro Display',
-                    fontSize: 20,
-                    fontWeight: FontWeight.w600,
-                    color: CupertinoColors.label,
-                  ),
+            return Container(
+              margin: const EdgeInsets.only(bottom: 16),
+              decoration: BoxDecoration(
+                color: CupertinoColors.systemBackground,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: CupertinoColors.systemGrey5,
+                  width: 1,
                 ),
-                const SizedBox(height: 16),
-                _buildTimeField(
-                  label: '醒來時間',
-                  time: event.time,
-                  onTimeSelected: (time) => _updateWakeUpEvent(
-                    index,
-                    WakeUpEvent(
-                      time: time,
-                      gotOutOfBed: event.gotOutOfBed,
-                      outOfBedDurationMinutes: event.outOfBedDurationMinutes,
-                      stayedInBedMinutes: event.stayedInBedMinutes,
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 16),
-                Row(
+              ),
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    CupertinoSwitch(
-                      value: event.gotOutOfBed,
-                      onChanged: (value) => _updateWakeUpEvent(
+                    Text(
+                      '第 ${index + 1} 次醒來',
+                      style: const TextStyle(
+                        fontFamily: 'SF Pro Display',
+                        fontSize: 20,
+                        fontWeight: FontWeight.w600,
+                        color: CupertinoColors.label,
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    _buildTimeField(
+                      label: '醒來時間',
+                      time: event.time,
+                      onTimeSelected: (time) => _updateWakeUpEvent(
                         index,
                         WakeUpEvent(
-                          time: event.time,
-                          gotOutOfBed: value,
+                          time: time,
+                          gotOutOfBed: event.gotOutOfBed,
                           outOfBedDurationMinutes:
-                              value ? event.outOfBedDurationMinutes : null,
+                              event.outOfBedDurationMinutes,
                           stayedInBedMinutes: event.stayedInBedMinutes,
                         ),
                       ),
                     ),
-                    const SizedBox(width: 8),
-                    const Text(
-                      '是否下床',
-                      style: TextStyle(
-                        fontFamily: 'SF Pro Text',
-                        fontSize: 17,
-                        color: CupertinoColors.label,
+                    const SizedBox(height: 16),
+                    _buildNumberInput(
+                      title: '清醒時長',
+                      value: event.stayedInBedMinutes,
+                      onChanged: (value) => _updateWakeUpEvent(
+                        index,
+                        WakeUpEvent(
+                          time: event.time,
+                          gotOutOfBed: event.gotOutOfBed,
+                          outOfBedDurationMinutes:
+                              event.outOfBedDurationMinutes,
+                          stayedInBedMinutes: value,
+                        ),
                       ),
+                      suffix: '分鐘',
                     ),
+                    const SizedBox(height: 16),
+                    Row(
+                      children: [
+                        CupertinoSwitch(
+                          value: event.gotOutOfBed,
+                          onChanged: (value) => _updateWakeUpEvent(
+                            index,
+                            WakeUpEvent(
+                              time: event.time,
+                              gotOutOfBed: value,
+                              outOfBedDurationMinutes:
+                                  value ? event.outOfBedDurationMinutes : null,
+                              stayedInBedMinutes: event.stayedInBedMinutes,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        const Text(
+                          '是否下床',
+                          style: TextStyle(
+                            fontFamily: 'SF Pro Text',
+                            fontSize: 17,
+                            color: CupertinoColors.label,
+                          ),
+                        ),
+                      ],
+                    ),
+                    if (event.gotOutOfBed) ...[
+                      const SizedBox(height: 16),
+                      _buildNumberInput(
+                        title: '下床時長',
+                        value: event.outOfBedDurationMinutes ?? 1,
+                        onChanged: (value) => _updateWakeUpEvent(
+                          index,
+                          WakeUpEvent(
+                            time: event.time,
+                            gotOutOfBed: event.gotOutOfBed,
+                            outOfBedDurationMinutes: value,
+                            stayedInBedMinutes: event.stayedInBedMinutes,
+                          ),
+                        ),
+                        suffix: '分鐘',
+                        minValue: 1,
+                        maxValue: event.stayedInBedMinutes,
+                      ),
+                    ],
                   ],
                 ),
-                if (event.gotOutOfBed) ...[
-                  const SizedBox(height: 16),
-                  _buildNumberInput(
-                    title: '下床時間',
-                    value: event.outOfBedDurationMinutes ?? 0,
-                    onChanged: (value) => _updateWakeUpEvent(
-                      index,
-                      WakeUpEvent(
-                        time: event.time,
-                        gotOutOfBed: event.gotOutOfBed,
-                        outOfBedDurationMinutes: value,
-                        stayedInBedMinutes: event.stayedInBedMinutes,
-                      ),
-                    ),
-                    suffix: '分鐘',
-                  ),
-                ],
-                const SizedBox(height: 16),
-                _buildNumberInput(
-                  title: '清醒時間',
-                  value: event.stayedInBedMinutes,
-                  onChanged: (value) => _updateWakeUpEvent(
-                    index,
-                    WakeUpEvent(
-                      time: event.time,
-                      gotOutOfBed: event.gotOutOfBed,
-                      outOfBedDurationMinutes: event.outOfBedDurationMinutes,
-                      stayedInBedMinutes: value,
-                    ),
-                  ),
-                  suffix: '分鐘',
-                ),
-                if (index < _wakeUpEvents.length - 1)
-                  const Padding(
-                    padding: EdgeInsets.symmetric(vertical: 24),
-                    child: Divider(),
-                  ),
-              ],
+              ),
             );
           }).toList(),
         ],
@@ -1512,6 +1516,8 @@ class _SleepDiaryEntryScreenState extends State<SleepDiaryEntryScreen> {
     required int value,
     required ValueChanged<int> onChanged,
     required String suffix,
+    int? minValue,
+    int? maxValue,
   }) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1539,12 +1545,14 @@ class _SleepDiaryEntryScreenState extends State<SleepDiaryEntryScreen> {
             children: [
               CupertinoButton(
                 padding: const EdgeInsets.all(12),
-                onPressed: value > 0 ? () => onChanged(value - 1) : null,
+                onPressed: (minValue != null && value <= minValue)
+                    ? null
+                    : () => onChanged(value - 1),
                 child: _wrapIcon(
                   CupertinoIcons.minus,
-                  color: value > 0
-                      ? CupertinoColors.activeBlue
-                      : CupertinoColors.systemGrey3,
+                  color: (minValue != null && value <= minValue)
+                      ? CupertinoColors.systemGrey3
+                      : CupertinoColors.activeBlue,
                 ),
               ),
               Expanded(
@@ -1561,10 +1569,14 @@ class _SleepDiaryEntryScreenState extends State<SleepDiaryEntryScreen> {
               ),
               CupertinoButton(
                 padding: const EdgeInsets.all(12),
-                onPressed: () => onChanged(value + 1),
+                onPressed: (maxValue != null && value >= maxValue)
+                    ? null
+                    : () => onChanged(value + 1),
                 child: _wrapIcon(
                   CupertinoIcons.plus,
-                  color: CupertinoColors.activeBlue,
+                  color: (maxValue != null && value >= maxValue)
+                      ? CupertinoColors.systemGrey3
+                      : CupertinoColors.activeBlue,
                 ),
               ),
             ],
@@ -2258,114 +2270,101 @@ class _SleepDiaryEntryScreenState extends State<SleepDiaryEntryScreen> {
           ),
         ),
         const SizedBox(height: 24),
-        Column(
-          children: [
-            const SizedBox(height: 8),
-            const Text(
-              '選擇持續時間',
-              style: TextStyle(
-                fontFamily: 'SF Pro Text',
-                fontSize: 17,
-                color: CupertinoColors.systemGrey,
-              ),
+        Center(
+          child: Text(
+            '選擇的時間: ${hours.toString().padLeft(2, '0')} 小時 ${minutes.toString().padLeft(2, '0')} 分鐘',
+            style: const TextStyle(
+              fontFamily: 'SF Pro Text',
+              fontSize: 17,
+              color: CupertinoColors.systemGrey,
             ),
-            const SizedBox(height: 16),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
+          ),
+        ),
+        const SizedBox(height: 16),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Column(
               children: [
-                Column(
-                  children: [
-                    const Text(
-                      '小時',
-                      style: TextStyle(
-                        fontFamily: 'SF Pro Text',
-                        fontSize: 15,
-                        color: CupertinoColors.label,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    SizedBox(
-                      width: 80,
-                      height: 160,
-                      child: CupertinoPicker(
-                        key: ValueKey('hourPicker_$title'),
-                        selectionOverlay: null,
-                        magnification: 1.1,
-                        squeeze: 1.0,
-                        itemExtent: 40,
-                        scrollController: hourController,
-                        onSelectedItemChanged: (int value) {
-                          onChanged(value, minutes);
-                        },
-                        children: List<Widget>.generate(24, (int index) {
-                          return Center(
-                            child: Text(
-                              index.toString().padLeft(2, '0'),
-                              style: const TextStyle(
-                                fontFamily: 'SF Pro Text',
-                                fontSize: 22,
-                                color: CupertinoColors.label,
-                              ),
-                            ),
-                          );
-                        }),
-                      ),
-                    ),
-                  ],
+                const Text(
+                  '小時',
+                  style: TextStyle(
+                    fontFamily: 'SF Pro Text',
+                    fontSize: 15,
+                    color: CupertinoColors.label,
+                  ),
                 ),
-                const SizedBox(width: 24),
-                Column(
-                  children: [
-                    const Text(
-                      '分鐘',
-                      style: TextStyle(
-                        fontFamily: 'SF Pro Text',
-                        fontSize: 15,
-                        color: CupertinoColors.label,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    SizedBox(
-                      width: 80,
-                      height: 160,
-                      child: CupertinoPicker(
-                        key: ValueKey('minutePicker_$title'),
-                        selectionOverlay: null,
-                        magnification: 1.1,
-                        squeeze: 1.0,
-                        itemExtent: 40,
-                        scrollController: minuteController,
-                        onSelectedItemChanged: (int value) {
-                          onChanged(hours, value);
-                        },
-                        children: List<Widget>.generate(60, (int index) {
-                          return Center(
-                            child: Text(
-                              index.toString().padLeft(2, '0'),
-                              style: const TextStyle(
-                                fontFamily: 'SF Pro Text',
-                                fontSize: 22,
-                                color: CupertinoColors.label,
-                              ),
-                            ),
-                          );
-                        }),
-                      ),
-                    ),
-                  ],
+                const SizedBox(height: 8),
+                SizedBox(
+                  width: 80,
+                  height: 160,
+                  child: CupertinoPicker(
+                    key: ValueKey('hourPicker_$title'),
+                    selectionOverlay: null,
+                    magnification: 1.1,
+                    squeeze: 1.0,
+                    itemExtent: 40,
+                    scrollController: hourController,
+                    onSelectedItemChanged: (int value) {
+                      onChanged(value, minutes);
+                    },
+                    children: List<Widget>.generate(24, (int index) {
+                      return Center(
+                        child: Text(
+                          index.toString().padLeft(2, '0'),
+                          style: const TextStyle(
+                            fontFamily: 'SF Pro Text',
+                            fontSize: 22,
+                            color: CupertinoColors.label,
+                          ),
+                        ),
+                      );
+                    }),
+                  ),
                 ),
               ],
             ),
-            const SizedBox(height: 16),
-            Text(
-              '選擇的時間: ${hours.toString().padLeft(2, '0')} 小時 ${minutes.toString().padLeft(2, '0')} 分鐘',
-              style: const TextStyle(
-                fontFamily: 'SF Pro Text',
-                fontSize: 17,
-                color: CupertinoColors.systemGrey,
-              ),
+            const SizedBox(width: 24),
+            Column(
+              children: [
+                const Text(
+                  '分鐘',
+                  style: TextStyle(
+                    fontFamily: 'SF Pro Text',
+                    fontSize: 15,
+                    color: CupertinoColors.label,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                SizedBox(
+                  width: 80,
+                  height: 160,
+                  child: CupertinoPicker(
+                    key: ValueKey('minutePicker_$title'),
+                    selectionOverlay: null,
+                    magnification: 1.1,
+                    squeeze: 1.0,
+                    itemExtent: 40,
+                    scrollController: minuteController,
+                    onSelectedItemChanged: (int value) {
+                      onChanged(hours, value);
+                    },
+                    children: List<Widget>.generate(60, (int index) {
+                      return Center(
+                        child: Text(
+                          index.toString().padLeft(2, '0'),
+                          style: const TextStyle(
+                            fontFamily: 'SF Pro Text',
+                            fontSize: 22,
+                            color: CupertinoColors.label,
+                          ),
+                        ),
+                      );
+                    }),
+                  ),
+                ),
+              ],
             ),
-            const SizedBox(height: 8),
           ],
         ),
       ],
