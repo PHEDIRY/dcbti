@@ -255,19 +255,15 @@ class _HomePageState extends State<HomePage> {
                   color: CupertinoColors.systemGrey,
                 ),
               ),
-              if (currentUser.isAnonymous) ...[
-                const SizedBox(height: 8),
-                CupertinoButton(
-                  onPressed: () {
-                    Navigator.of(context).push(
-                      CupertinoPageRoute(
-                        builder: (context) => const AuthScreen(),
-                      ),
-                    );
-                  },
-                  child: const Text('註冊/登入帳號'),
+              SizedBox(height: 4),
+              Text(
+                'User ID: ${currentUser.uid}',
+                style: const TextStyle(
+                  fontFamily: 'SF Pro Text',
+                  fontSize: 13,
+                  color: CupertinoColors.systemGrey2,
                 ),
-              ],
+              ),
             ],
             const Spacer(),
             Padding(

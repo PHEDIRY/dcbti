@@ -2,6 +2,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import '../../../core/models/sleep_diary_entry.dart';
 import 'package:intl/intl.dart';
+import '../../../core/services/sleep_diary_service.dart';
 
 class SleepDiaryEntryScreen extends StatefulWidget {
   const SleepDiaryEntryScreen({super.key});
@@ -17,18 +18,28 @@ class _SleepDiaryEntryScreenState extends State<SleepDiaryEntryScreen> {
   late DateTime _bedTime;
   late DateTime _finalAwakeningTime;
 
+  // Add state for Q3 selection
+  bool? _hasLeftBed;
+  late Duration _leftBedDuration;
+
   @override
   void initState() {
     super.initState();
+    // Initialize Q3 selection as null (no selection)
+    _hasLeftBed = null;
+    _leftBedDuration = Duration.zero;
     // Set default times using DateTime.now() as base to ensure correct date
     final now = DateTime.now();
+    final yesterday = now.subtract(const Duration(days: 1));
+    // Q1: Default bedtime is 23:00 previous day
     _bedTime = DateTime(
-      now.year,
-      now.month,
-      now.day,
+      yesterday.year,
+      yesterday.month,
+      yesterday.day,
       23, // 23:00 default
       0,
     );
+    // Q7: Default wake time is 07:00 current day
     _finalAwakeningTime = DateTime(
       now.year,
       now.month,
@@ -69,7 +80,7 @@ class _SleepDiaryEntryScreenState extends State<SleepDiaryEntryScreen> {
   List<Widget> get _pages => [
         _buildBedTimePage(),
         _buildTimeToFallAsleepPage(),
-        _buildInitialOutOfBedPage(),
+        _buildLeftBedPage(),
         _buildSleepDifficultyReasonPage(),
         _buildNumberOfAwakeningsPage(),
         _buildWakeUpDifficultyReasonPage(),
@@ -199,7 +210,25 @@ class _SleepDiaryEntryScreenState extends State<SleepDiaryEntryScreen> {
     super.dispose();
   }
 
-  void _handleSubmit() {
+  void _handleSubmit() async {
+    // Validation before creating entry
+    final validationError = _validateEntry();
+    if (validationError != null) {
+      showCupertinoDialog(
+        context: context,
+        builder: (context) => CupertinoAlertDialog(
+          title: const Text('資料有誤'),
+          content: Text(validationError),
+          actions: [
+            CupertinoDialogAction(
+              child: const Text('確定'),
+              onPressed: () => Navigator.of(context).pop(),
+            ),
+          ],
+        ),
+      );
+      return;
+    }
     final entry = SleepDiaryEntry.create(
       entryDate: _bedTime,
       bedTime: _bedTime,
@@ -227,7 +256,79 @@ class _SleepDiaryEntryScreenState extends State<SleepDiaryEntryScreen> {
           _initialOutOfBedHours * 60 + _initialOutOfBedMinutes,
     );
 
-    print('[SleepDiaryEntryScreen] Created entry: ${entry.toMap()}');
+    final service = SleepDiaryService();
+    showCupertinoDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => const CupertinoAlertDialog(
+        content: SizedBox(
+          height: 60,
+          child: Center(child: CupertinoActivityIndicator()),
+        ),
+      ),
+    );
+    try {
+      await service.saveEntry(entry);
+      if (mounted) {
+        Navigator.of(context).pop(); // Remove loading dialog
+
+        // Show success dialog
+        showCupertinoDialog(
+          context: context,
+          builder: (context) => CupertinoAlertDialog(
+            title: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Text('✅ '),
+                const Text(
+                  '已儲存',
+                  style: TextStyle(
+                    fontFamily: 'SF Pro Display',
+                    fontSize: 17,
+                  ),
+                ),
+              ],
+            ),
+            content: Text(
+              '你的睡眠日記已經儲存成功！\n${DateFormat('yyyy年M月d日 (E)', 'zh_TW').format(_bedTime)}',
+              style: const TextStyle(
+                fontFamily: 'SF Pro Text',
+                fontSize: 13,
+                height: 1.3,
+              ),
+            ),
+            actions: [
+              CupertinoDialogAction(
+                isDefaultAction: true,
+                child: const Text('完成'),
+                onPressed: () {
+                  Navigator.of(context).pop(); // Close dialog
+                  Navigator.of(context)
+                      .pop(true); // Pop screen with success result
+                },
+              ),
+            ],
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        Navigator.of(context).pop(); // Remove loading
+        showCupertinoDialog(
+          context: context,
+          builder: (context) => CupertinoAlertDialog(
+            title: const Text('儲存失敗'),
+            content: Text('發生錯誤：\n$e'),
+            actions: [
+              CupertinoDialogAction(
+                child: const Text('確定'),
+                onPressed: () => Navigator.of(context).pop(),
+              ),
+            ],
+          ),
+        );
+      }
+    }
   }
 
   void _addWakeUpEvent() {
@@ -489,10 +590,8 @@ class _SleepDiaryEntryScreenState extends State<SleepDiaryEntryScreen> {
                 child: CupertinoButton.filled(
                   onPressed: () {
                     setState(() {
-                      // --- Custom logic to skip Q9 if Q8 answer is '是' ---
-                      // Q8: Immediate wake up (index 7), Q9: Time in bed after waking (index 8)
-                      // If on Q8 and answer is '是', skip Q9 by incrementing by 2
-                      if (_currentStep == 7 && _immediateWakeUp == true) {
+                      // Always skip Q9 (index 8) since it's merged with Q8
+                      if (_currentStep == 7) {
                         _currentStep += 2;
                       } else {
                         _currentStep++;
@@ -513,7 +612,56 @@ class _SleepDiaryEntryScreenState extends State<SleepDiaryEntryScreen> {
     required String subtitle,
     required DateTime time,
     required Function(DateTime) onChanged,
+    DateTime? referenceTime,
+    bool isWakeTime = false,
+    DateTime? minTime,
+    DateTime? maxTime,
   }) {
+    // Calculate display date and hint
+    DateTime displayDate = time;
+    if (referenceTime != null) {
+      if (isWakeTime) {
+        if (time.isBefore(referenceTime)) {
+          displayDate = time.add(const Duration(days: 1));
+        }
+      }
+    }
+    final dateHint =
+        '你選擇的日期與時間：${DateFormat('yyyy年M月d日 HH:mm', 'zh_TW').format(displayDate)}';
+
+    // --- Custom hour/minute picker logic ---
+    final min = minTime ?? time;
+    final max = maxTime ?? time;
+
+    // For Q1: Create a continuous range from previous day 12:00 to current time
+    // Calculate total hours from min to max
+    int hoursFromMin;
+    if (min.day != max.day) {
+      // If spanning days, count hours from min time to midnight, then add hours until max time
+      hoursFromMin = (24 - min.hour) + max.hour + 1;
+    } else {
+      hoursFromMin = max.hour - min.hour + 1;
+    }
+
+    // Calculate the current selection's position in the continuous range
+    int selectedPosition;
+    if (time.day == min.day) {
+      selectedPosition = time.hour - min.hour;
+    } else {
+      selectedPosition = (24 - min.hour) + time.hour;
+    }
+
+    // For minutes, limit range if we're at boundary hours
+    bool isAtMinHour = time.day == min.day && time.hour == min.hour;
+    bool isAtMaxHour = time.day == max.day && time.hour == max.hour;
+    int minMinute = isAtMinHour ? min.minute : 0;
+    int maxMinute = isAtMaxHour ? max.minute : 59;
+
+    final hourController =
+        FixedExtentScrollController(initialItem: selectedPosition);
+    final minuteController =
+        FixedExtentScrollController(initialItem: time.minute - minMinute);
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -536,150 +684,202 @@ class _SleepDiaryEntryScreenState extends State<SleepDiaryEntryScreen> {
           ),
         ),
         const SizedBox(height: 24),
-        Column(
+        const Text(
+          '選擇時間',
+          style: TextStyle(
+            fontFamily: 'SF Pro Text',
+            fontSize: 17,
+            color: CupertinoColors.systemGrey,
+          ),
+        ),
+        const SizedBox(height: 16),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const SizedBox(height: 8),
-            const Text(
-              '選擇時間',
-              style: TextStyle(
-                fontFamily: 'SF Pro Text',
-                fontSize: 17,
-                color: CupertinoColors.systemGrey,
-              ),
-            ),
-            const SizedBox(height: 16),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
+            Column(
               children: [
-                Column(
-                  children: [
-                    const Text(
-                      '小時',
-                      style: TextStyle(
-                        fontFamily: 'SF Pro Text',
-                        fontSize: 15,
-                        color: CupertinoColors.label,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    SizedBox(
-                      width: 80,
-                      height: 160,
-                      child: CupertinoPicker(
-                        selectionOverlay: null,
-                        magnification: 1.1,
-                        squeeze: 1.0,
-                        itemExtent: 40,
-                        scrollController: FixedExtentScrollController(
-                          initialItem: time.hour,
-                        ),
-                        onSelectedItemChanged: (int value) {
-                          onChanged(DateTime(
-                            time.year,
-                            time.month,
-                            time.day,
-                            value,
-                            time.minute,
-                          ));
-                        },
-                        children: List<Widget>.generate(24, (int index) {
-                          return Center(
-                            child: Text(
-                              index.toString().padLeft(2, '0'),
-                              style: const TextStyle(
-                                fontFamily: 'SF Pro Text',
-                                fontSize: 22,
-                                color: CupertinoColors.label,
-                              ),
-                            ),
-                          );
-                        }),
-                      ),
-                    ),
-                  ],
+                const Text(
+                  '小時',
+                  style: TextStyle(
+                    fontFamily: 'SF Pro Text',
+                    fontSize: 15,
+                    color: CupertinoColors.label,
+                  ),
                 ),
-                const SizedBox(width: 24),
-                Column(
-                  children: [
-                    const Text(
-                      '分鐘',
-                      style: TextStyle(
-                        fontFamily: 'SF Pro Text',
-                        fontSize: 15,
-                        color: CupertinoColors.label,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    SizedBox(
-                      width: 80,
-                      height: 160,
-                      child: CupertinoPicker(
-                        selectionOverlay: null,
-                        magnification: 1.1,
-                        squeeze: 1.0,
-                        itemExtent: 40,
-                        scrollController: FixedExtentScrollController(
-                          initialItem: time.minute,
+                const SizedBox(height: 8),
+                SizedBox(
+                  width: 80,
+                  height: 160,
+                  child: CupertinoPicker(
+                    selectionOverlay: null,
+                    magnification: 1.1,
+                    squeeze: 1.0,
+                    itemExtent: 40,
+                    scrollController: hourController,
+                    onSelectedItemChanged: (int value) {
+                      // Convert the continuous position back to actual date/hour
+                      DateTime newTime;
+                      int newHour;
+                      if (value < (24 - min.hour)) {
+                        // Previous day
+                        newHour = min.hour + value;
+                        newTime = DateTime(
+                          min.year,
+                          min.month,
+                          min.day,
+                          newHour,
+                          time.minute,
+                        );
+                      } else {
+                        // Current day
+                        newHour = value - (24 - min.hour);
+                        newTime = DateTime(
+                          max.year,
+                          max.month,
+                          max.day,
+                          newHour,
+                          time.minute,
+                        );
+                      }
+
+                      // Adjust minutes if needed
+                      int adjustedMinute = time.minute;
+                      if (newTime.day == min.day &&
+                          newHour == min.hour &&
+                          adjustedMinute < min.minute) {
+                        adjustedMinute = min.minute;
+                      }
+                      if (newTime.day == max.day &&
+                          newHour == max.hour &&
+                          adjustedMinute > max.minute) {
+                        adjustedMinute = max.minute;
+                      }
+
+                      newTime = DateTime(
+                        newTime.year,
+                        newTime.month,
+                        newTime.day,
+                        newHour,
+                        adjustedMinute,
+                      );
+
+                      onChanged(newTime);
+                    },
+                    children: List<Widget>.generate(hoursFromMin, (int index) {
+                      int displayHour;
+                      if (index < (24 - min.hour)) {
+                        // Previous day
+                        displayHour = min.hour + index;
+                      } else {
+                        // Current day
+                        displayHour = index - (24 - min.hour);
+                      }
+                      return Center(
+                        child: Text(
+                          displayHour.toString().padLeft(2, '0'),
+                          style: const TextStyle(
+                            fontFamily: 'SF Pro Text',
+                            fontSize: 22,
+                            color: CupertinoColors.label,
+                          ),
                         ),
-                        onSelectedItemChanged: (int value) {
-                          onChanged(DateTime(
-                            time.year,
-                            time.month,
-                            time.day,
-                            time.hour,
-                            value,
-                          ));
-                        },
-                        children: List<Widget>.generate(60, (int index) {
-                          return Center(
-                            child: Text(
-                              index.toString().padLeft(2, '0'),
-                              style: const TextStyle(
-                                fontFamily: 'SF Pro Text',
-                                fontSize: 22,
-                                color: CupertinoColors.label,
-                              ),
-                            ),
-                          );
-                        }),
-                      ),
-                    ),
-                  ],
+                      );
+                    }),
+                  ),
                 ),
               ],
             ),
-            const SizedBox(height: 16),
-            Text(
-              '選擇的時間: ${time.hour.toString().padLeft(2, '0')}:${time.minute.toString().padLeft(2, '0')}',
-              style: const TextStyle(
-                fontFamily: 'SF Pro Text',
-                fontSize: 17,
-                color: CupertinoColors.systemGrey,
-              ),
+            const SizedBox(width: 24),
+            Column(
+              children: [
+                const Text(
+                  '分鐘',
+                  style: TextStyle(
+                    fontFamily: 'SF Pro Text',
+                    fontSize: 15,
+                    color: CupertinoColors.label,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                SizedBox(
+                  width: 80,
+                  height: 160,
+                  child: CupertinoPicker(
+                    selectionOverlay: null,
+                    magnification: 1.1,
+                    squeeze: 1.0,
+                    itemExtent: 40,
+                    scrollController: minuteController,
+                    onSelectedItemChanged: (int value) {
+                      int newMinute = minMinute + value;
+                      onChanged(DateTime(
+                        time.year,
+                        time.month,
+                        time.day,
+                        time.hour,
+                        newMinute,
+                      ));
+                    },
+                    children: List<Widget>.generate(maxMinute - minMinute + 1,
+                        (int index) {
+                      final minute = minMinute + index;
+                      return Center(
+                        child: Text(
+                          minute.toString().padLeft(2, '0'),
+                          style: const TextStyle(
+                            fontFamily: 'SF Pro Text',
+                            fontSize: 22,
+                            color: CupertinoColors.label,
+                          ),
+                        ),
+                      );
+                    }),
+                  ),
+                ),
+              ],
             ),
-            const SizedBox(height: 8),
           ],
         ),
+        const SizedBox(height: 16),
+        Center(
+          child: Text(
+            dateHint,
+            style: const TextStyle(
+              fontFamily: 'SF Pro Text',
+              fontSize: 17,
+              color: CupertinoColors.systemGrey,
+            ),
+          ),
+        ),
+        const SizedBox(height: 16),
       ],
     );
   }
 
   Widget _buildBedTimePage() {
+    final now = DateTime.now();
+    final yesterday = now.subtract(const Duration(days: 1));
+    final minTime = DateTime(
+      yesterday.year,
+      yesterday.month,
+      yesterday.day,
+      12,
+      0,
+    ); // 12:00 PM previous day
+    final maxTime = now; // Current time
     return _buildTimePicker(
       title: '你什麼時候上床睡覺？',
       subtitle: '選擇你躺到床上準備睡覺的時間',
       time: _bedTime,
       onChanged: (time) {
         setState(() {
-          _bedTime = DateTime(
-            _bedTime.year,
-            _bedTime.month,
-            _bedTime.day,
-            time.hour,
-            time.minute,
-          );
+          _bedTime = time;
         });
       },
+      referenceTime: DateTime(_bedTime.year, _bedTime.month, _bedTime.day),
+      isWakeTime: false,
+      minTime: minTime,
+      maxTime: maxTime,
     );
   }
 
@@ -698,18 +898,75 @@ class _SleepDiaryEntryScreenState extends State<SleepDiaryEntryScreen> {
     );
   }
 
-  Widget _buildInitialOutOfBedPage() {
-    return _buildDurationPicker(
-      title: '中間有離開床舖嗎？',
-      subtitle: '如果有的話離開多長時間',
-      hours: _initialOutOfBedHours,
-      minutes: _initialOutOfBedMinutes,
-      onChanged: (hours, minutes) {
-        setState(() {
-          _initialOutOfBedHours = hours;
-          _initialOutOfBedMinutes = minutes;
-        });
-      },
+  Widget _buildLeftBedPage() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          '中間有離開床舖嗎？',
+          style: TextStyle(
+            fontFamily: 'SF Pro Display',
+            fontSize: 24,
+            fontWeight: FontWeight.bold,
+            color: CupertinoColors.label,
+          ),
+        ),
+        const SizedBox(height: 24),
+        Column(
+          children: ['是', '否'].map((option) {
+            final isSelected = _hasLeftBed == (option == '是');
+            return GestureDetector(
+              onTap: () => setState(() {
+                _hasLeftBed = option == '是';
+                if (option == '否') {
+                  _leftBedDuration = Duration.zero;
+                }
+              }),
+              child: Container(
+                width: double.infinity,
+                margin: const EdgeInsets.only(bottom: 12),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 14,
+                ),
+                decoration: BoxDecoration(
+                  color: CupertinoColors.systemBackground,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: isSelected
+                        ? CupertinoColors.activeBlue
+                        : CupertinoColors.systemGrey5,
+                    width: 1,
+                  ),
+                ),
+                child: Text(
+                  option,
+                  style: TextStyle(
+                    fontFamily: 'SF Pro Text',
+                    fontSize: 17,
+                    color: isSelected
+                        ? CupertinoColors.activeBlue
+                        : CupertinoColors.label,
+                  ),
+                ),
+              ),
+            );
+          }).toList(),
+        ),
+        if (_hasLeftBed == true) ...[
+          _buildDurationPicker(
+            title: '',
+            subtitle: '選擇離開床舖的持續時間',
+            hours: _leftBedDuration.inHours,
+            minutes: _leftBedDuration.inMinutes.remainder(60),
+            onChanged: (int hours, int minutes) {
+              setState(() {
+                _leftBedDuration = Duration(hours: hours, minutes: minutes);
+              });
+            },
+          ),
+        ],
+      ],
     );
   }
 
@@ -1008,6 +1265,11 @@ class _SleepDiaryEntryScreenState extends State<SleepDiaryEntryScreen> {
   }
 
   Widget _buildFinalAwakeningPage() {
+    final now = DateTime.now();
+    final minTime = _bedTime;
+    final maxTime = now;
+    final defaultTime =
+        DateTime(now.year, now.month, now.day, 7, 0); // 07:00 current day
     return _buildTimePicker(
       title: '你最後是什麼時候醒來的？',
       subtitle: '選擇最後一次醒來的時間',
@@ -1023,6 +1285,10 @@ class _SleepDiaryEntryScreenState extends State<SleepDiaryEntryScreen> {
           );
         });
       },
+      referenceTime: _bedTime,
+      isWakeTime: true,
+      minTime: minTime,
+      maxTime: maxTime,
     );
   }
 
@@ -1039,78 +1305,69 @@ class _SleepDiaryEntryScreenState extends State<SleepDiaryEntryScreen> {
             color: CupertinoColors.label,
           ),
         ),
-        const SizedBox(height: 8),
-        const Text(
-          '選擇最符合你情況的答案',
-          style: TextStyle(
-            fontFamily: 'SF Pro Text',
-            fontSize: 17,
-            color: CupertinoColors.systemGrey,
-          ),
-        ),
         const SizedBox(height: 24),
-        _buildImmediateWakeUpSection(),
+        Column(
+          children: ['是', '否'].map((option) {
+            final isSelected = _immediateWakeUp == (option == '是');
+            return GestureDetector(
+              onTap: () => setState(() {
+                _immediateWakeUp = option == '是';
+                if (option == '是') {
+                  _timeInBedAfterWakingHours = 0;
+                  _timeInBedAfterWakingMinutes = 0;
+                }
+              }),
+              child: Container(
+                width: double.infinity,
+                margin: const EdgeInsets.only(bottom: 12),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 14,
+                ),
+                decoration: BoxDecoration(
+                  color: CupertinoColors.systemBackground,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: isSelected
+                        ? CupertinoColors.activeBlue
+                        : CupertinoColors.systemGrey5,
+                    width: 1,
+                  ),
+                ),
+                child: Text(
+                  option,
+                  style: TextStyle(
+                    fontFamily: 'SF Pro Text',
+                    fontSize: 17,
+                    color: isSelected
+                        ? CupertinoColors.activeBlue
+                        : CupertinoColors.label,
+                  ),
+                ),
+              ),
+            );
+          }).toList(),
+        ),
+        if (_immediateWakeUp == false) ...[
+          _buildDurationPicker(
+            title: '',
+            subtitle: '選擇賴床的持續時間',
+            hours: _timeInBedAfterWakingHours,
+            minutes: _timeInBedAfterWakingMinutes,
+            onChanged: (hours, minutes) {
+              setState(() {
+                _timeInBedAfterWakingHours = hours;
+                _timeInBedAfterWakingMinutes = minutes;
+              });
+            },
+          ),
+        ],
       ],
     );
   }
 
-  Widget _buildImmediateWakeUpSection() {
-    final options = [
-      '是',
-      '否',
-    ];
-
-    return Column(
-      children: options.map((option) {
-        final isSelected = _immediateWakeUp == (option == '是');
-        return GestureDetector(
-          onTap: () => setState(() => _immediateWakeUp = option == '是'),
-          child: Container(
-            width: double.infinity,
-            margin: const EdgeInsets.only(bottom: 12),
-            padding: const EdgeInsets.symmetric(
-              horizontal: 16,
-              vertical: 14,
-            ),
-            decoration: BoxDecoration(
-              color: CupertinoColors.systemBackground,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(
-                color: isSelected
-                    ? CupertinoColors.activeBlue
-                    : CupertinoColors.systemGrey5,
-                width: 1,
-              ),
-            ),
-            child: Text(
-              option,
-              style: TextStyle(
-                fontFamily: 'SF Pro Text',
-                fontSize: 17,
-                color: isSelected
-                    ? CupertinoColors.activeBlue
-                    : CupertinoColors.label,
-              ),
-            ),
-          ),
-        );
-      }).toList(),
-    );
-  }
-
   Widget _buildTimeInBedAfterWakingPage() {
-    return _buildDurationPicker(
-      title: '在離開床舖之前，在床上賴床了多久？',
-      subtitle: '若不確定，大致預估即可',
-      hours: _timeInBedAfterWakingHours,
-      minutes: _timeInBedAfterWakingMinutes,
-      onChanged: (hours, minutes) {
-        setState(() {
-          _timeInBedAfterWakingHours = hours;
-          _timeInBedAfterWakingMinutes = minutes;
-        });
-      },
-    );
+    return Container(); // Empty page that will be skipped
   }
 
   Widget _buildSleepQualityPage() {
@@ -1333,7 +1590,7 @@ class _SleepDiaryEntryScreenState extends State<SleepDiaryEntryScreen> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const Text(
-          '前一天是否有這些行為？',
+          '昨天有攝取以下物品嗎？',
           style: TextStyle(
             fontFamily: 'SF Pro Display',
             fontSize: 24,
@@ -1343,7 +1600,7 @@ class _SleepDiaryEntryScreenState extends State<SleepDiaryEntryScreen> {
         ),
         const SizedBox(height: 8),
         const Text(
-          '選擇所有符合的項目',
+          '選擇有攝取的項目並記錄時間',
           style: TextStyle(
             fontFamily: 'SF Pro Text',
             fontSize: 17,
@@ -1351,43 +1608,336 @@ class _SleepDiaryEntryScreenState extends State<SleepDiaryEntryScreen> {
           ),
         ),
         const SizedBox(height: 24),
-        _buildConsumptionEventSection(
-          title: '咖啡因攝入',
-          event: _caffeineConsumption,
-          onChanged: (event) => setState(() => _caffeineConsumption = event),
-        ),
-        const SizedBox(height: 24),
-        _buildConsumptionEventSection(
-          title: '酒精攝入',
-          event: _alcoholConsumption,
-          onChanged: (event) => setState(() => _alcoholConsumption = event),
-        ),
-        const SizedBox(height: 24),
-        _buildConsumptionEventSection(
-          title: '睡眠藥物',
-          event: _sleepMedicineConsumption,
-          onChanged: (event) =>
-              setState(() => _sleepMedicineConsumption = event),
-        ),
-        const SizedBox(height: 24),
-        _buildConsumptionEventSection(
-          title: '吸菸',
-          event: _smokingEvent,
-          onChanged: (event) => setState(() => _smokingEvent = event),
-        ),
-        const SizedBox(height: 24),
-        _buildConsumptionEventSection(
-          title: '運動',
-          event: _exerciseEvent,
-          onChanged: (event) => setState(() => _exerciseEvent = event),
-        ),
-        const SizedBox(height: 24),
-        _buildConsumptionEventSection(
-          title: '睡前吃東西/消夜',
-          event: _lastMealTime,
-          onChanged: (event) => setState(() => _lastMealTime = event),
-        ),
+        _buildConsumptionEventsList(),
       ],
+    );
+  }
+
+  Widget _buildConsumptionEventsList() {
+    final consumptionTypes = [
+      {
+        'id': 'caffeine',
+        'icon': '☕️',
+        'title': '咖啡因',
+        'subtitle': '咖啡、茶、能量飲料等',
+        'event': _caffeineConsumption,
+      },
+      {
+        'id': 'alcohol',
+        'icon': '🍷',
+        'title': '酒精',
+        'subtitle': '啤酒、紅酒、烈酒等',
+        'event': _alcoholConsumption,
+      },
+      {
+        'id': 'medicine',
+        'icon': '💊',
+        'title': '助眠藥物',
+        'subtitle': '安眠藥、褪黑激素等',
+        'event': _sleepMedicineConsumption,
+      },
+      {
+        'id': 'smoking',
+        'icon': '🚬',
+        'title': '尼古丁',
+        'subtitle': '香菸、電子煙等',
+        'event': _smokingEvent,
+      },
+      {
+        'id': 'exercise',
+        'icon': '🏃',
+        'title': '運動',
+        'subtitle': '中等強度以上的運動',
+        'event': _exerciseEvent,
+      },
+      {
+        'id': 'meal',
+        'icon': '🍽️',
+        'title': '消夜',
+        'subtitle': '接近睡前吃的東西',
+        'event': _lastMealTime,
+      },
+    ];
+
+    return Column(
+      children: [
+        for (int row = 0; row < 3; row++)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 12),
+            child: Row(
+              children: [
+                for (int col = 0; col < 2; col++) ...[
+                  Expanded(
+                    child: _buildConsumptionCard(
+                      consumptionTypes[row * 2 + col],
+                    ),
+                  ),
+                  if (col == 0) const SizedBox(width: 12),
+                ],
+              ],
+            ),
+          ),
+      ],
+    );
+  }
+
+  Widget _buildConsumptionCard(Map<String, dynamic> type) {
+    final hasEvent = type['event'] != null;
+    String timeText = '';
+    if (hasEvent) {
+      final event = type['event'] as ConsumptionEvent;
+      timeText = DateFormat('HH:mm').format(event.time);
+    }
+
+    return GestureDetector(
+      onTap: () => _showConsumptionDetailSheet(type['id'] as String),
+      child: Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: CupertinoColors.systemBackground,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: hasEvent
+                ? CupertinoColors.activeBlue
+                : CupertinoColors.systemGrey5,
+            width: 1,
+          ),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Text(
+                  type['icon'] as String,
+                  style: const TextStyle(fontSize: 24),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    type['title'] as String,
+                    style: TextStyle(
+                      fontFamily: 'SF Pro Text',
+                      fontSize: 17,
+                      fontWeight: FontWeight.w600,
+                      color: hasEvent
+                          ? CupertinoColors.activeBlue
+                          : CupertinoColors.label,
+                    ),
+                  ),
+                ),
+                Icon(
+                  CupertinoIcons.chevron_right,
+                  color: hasEvent
+                      ? CupertinoColors.activeBlue
+                      : CupertinoColors.systemGrey3,
+                  size: 16,
+                ),
+              ],
+            ),
+            if (!hasEvent) ...[
+              const SizedBox(height: 4),
+              Text(
+                type['subtitle'] as String,
+                style: const TextStyle(
+                  fontFamily: 'SF Pro Text',
+                  fontSize: 13,
+                  color: CupertinoColors.systemGrey,
+                ),
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ] else ...[
+              const SizedBox(height: 4),
+              Text(
+                timeText,
+                style: const TextStyle(
+                  fontFamily: 'SF Pro Text',
+                  fontSize: 13,
+                  color: CupertinoColors.activeBlue,
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showConsumptionDetailSheet(String typeId) {
+    ConsumptionEvent? currentEvent;
+    String title = '';
+    String subtitle = '';
+
+    switch (typeId) {
+      case 'caffeine':
+        currentEvent = _caffeineConsumption;
+        title = '咖啡因攝取時間';
+        subtitle = '選擇攝取咖啡因的時間';
+        break;
+      case 'alcohol':
+        currentEvent = _alcoholConsumption;
+        title = '酒精攝取時間';
+        subtitle = '選擇攝取酒精的時間';
+        break;
+      case 'medicine':
+        currentEvent = _sleepMedicineConsumption;
+        title = '助眠藥物服用時間';
+        subtitle = '選擇服用助眠藥物的時間';
+        break;
+      case 'smoking':
+        currentEvent = _smokingEvent;
+        title = '尼古丁攝取時間';
+        subtitle = '選擇攝取尼古丁的時間';
+        break;
+      case 'exercise':
+        currentEvent = _exerciseEvent;
+        title = '運動時間';
+        subtitle = '選擇運動的時間';
+        break;
+      case 'meal':
+        currentEvent = _lastMealTime;
+        title = '最後一餐時間';
+        subtitle = '選擇最後一餐的時間';
+        break;
+    }
+
+    final now = DateTime.now();
+    final yesterday = now.subtract(const Duration(days: 1));
+    DateTime initialTime = currentEvent?.time ??
+        DateTime(yesterday.year, yesterday.month, yesterday.day, 20, 0);
+
+    showCupertinoModalPopup<void>(
+      context: context,
+      builder: (BuildContext context) => Container(
+        height: 400,
+        padding: const EdgeInsets.all(16),
+        margin: EdgeInsets.only(
+          bottom: MediaQuery.of(context).viewInsets.bottom,
+        ),
+        decoration: const BoxDecoration(
+          color: CupertinoColors.systemBackground,
+          borderRadius: BorderRadius.only(
+            topLeft: Radius.circular(20),
+            topRight: Radius.circular(20),
+          ),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                CupertinoButton(
+                  padding: EdgeInsets.zero,
+                  child: Text(
+                    currentEvent != null ? '移除' : '取消',
+                    style: const TextStyle(
+                      color: CupertinoColors.destructiveRed,
+                    ),
+                  ),
+                  onPressed: () {
+                    setState(() {
+                      switch (typeId) {
+                        case 'caffeine':
+                          _caffeineConsumption = null;
+                          break;
+                        case 'alcohol':
+                          _alcoholConsumption = null;
+                          break;
+                        case 'medicine':
+                          _sleepMedicineConsumption = null;
+                          break;
+                        case 'smoking':
+                          _smokingEvent = null;
+                          break;
+                        case 'exercise':
+                          _exerciseEvent = null;
+                          break;
+                        case 'meal':
+                          _lastMealTime = null;
+                          break;
+                      }
+                    });
+                    Navigator.pop(context);
+                  },
+                ),
+                CupertinoButton(
+                  padding: EdgeInsets.zero,
+                  child: const Text('完成'),
+                  onPressed: () => Navigator.pop(context),
+                ),
+              ],
+            ),
+            Text(
+              title,
+              style: const TextStyle(
+                fontFamily: 'SF Pro Display',
+                fontSize: 24,
+                fontWeight: FontWeight.bold,
+                color: CupertinoColors.label,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              subtitle,
+              style: const TextStyle(
+                fontFamily: 'SF Pro Text',
+                fontSize: 17,
+                color: CupertinoColors.systemGrey,
+              ),
+            ),
+            const SizedBox(height: 24),
+            Expanded(
+              child: CupertinoDatePicker(
+                mode: CupertinoDatePickerMode.time,
+                initialDateTime: initialTime,
+                minimumDate: DateTime(
+                  yesterday.year,
+                  yesterday.month,
+                  yesterday.day,
+                ),
+                maximumDate: now,
+                use24hFormat: true,
+                onDateTimeChanged: (DateTime newTime) {
+                  setState(() {
+                    final event = ConsumptionEvent(
+                      time: DateTime(
+                        yesterday.year,
+                        yesterday.month,
+                        yesterday.day,
+                        newTime.hour,
+                        newTime.minute,
+                      ),
+                    );
+
+                    switch (typeId) {
+                      case 'caffeine':
+                        _caffeineConsumption = event;
+                        break;
+                      case 'alcohol':
+                        _alcoholConsumption = event;
+                        break;
+                      case 'medicine':
+                        _sleepMedicineConsumption = event;
+                        break;
+                      case 'smoking':
+                        _smokingEvent = event;
+                        break;
+                      case 'exercise':
+                        _exerciseEvent = event;
+                        break;
+                      case 'meal':
+                        _lastMealTime = event;
+                        break;
+                    }
+                  });
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 
@@ -1620,79 +2170,6 @@ class _SleepDiaryEntryScreenState extends State<SleepDiaryEntryScreen> {
     }
   }
 
-  Widget _buildConsumptionEventSection({
-    required String title,
-    required ConsumptionEvent? event,
-    required ValueChanged<ConsumptionEvent?> onChanged,
-  }) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            Text(
-              title,
-              style: const TextStyle(
-                fontFamily: 'SF Pro Text',
-                fontSize: 17,
-                fontWeight: FontWeight.w600,
-                color: CupertinoColors.systemGrey,
-              ),
-            ),
-            const Spacer(),
-            CupertinoSwitch(
-              value: event != null,
-              onChanged: (value) {
-                if (value) {
-                  onChanged(ConsumptionEvent(
-                    time: DateTime.now(),
-                    details: null,
-                  ));
-                } else {
-                  onChanged(null);
-                }
-              },
-            ),
-          ],
-        ),
-        if (event != null) ...[
-          const SizedBox(height: 16),
-          _buildTimeField(
-            label: '時間',
-            time: event.time,
-            onTimeSelected: (time) => onChanged(ConsumptionEvent(
-              time: time,
-              details: event.details,
-            )),
-          ),
-          const SizedBox(height: 16),
-          Container(
-            decoration: BoxDecoration(
-              color: CupertinoColors.systemBackground,
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(
-                color: CupertinoColors.systemGrey5,
-                width: 1,
-              ),
-            ),
-            child: CupertinoTextField(
-              placeholder: '備註（選填）',
-              padding: const EdgeInsets.all(12),
-              onChanged: (value) => onChanged(ConsumptionEvent(
-                time: event.time,
-                details: value.isEmpty ? null : value,
-              )),
-              style: const TextStyle(
-                fontFamily: 'SF Pro Text',
-                fontSize: 17,
-              ),
-            ),
-          ),
-        ],
-      ],
-    );
-  }
-
   Widget _buildNotesPage() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1893,5 +2370,52 @@ class _SleepDiaryEntryScreenState extends State<SleepDiaryEntryScreen> {
         ),
       ],
     );
+  }
+
+  // Validation logic for impossible situations
+  String? _validateEntry() {
+    // Calculate actual bed and wake times (with cross-midnight support)
+    DateTime bed = _bedTime;
+    DateTime wake = _finalAwakeningTime;
+    if (wake.isBefore(bed)) {
+      // Assume wake is next day
+      wake = wake.add(const Duration(days: 1));
+    }
+    if (!wake.isAfter(bed)) {
+      return '醒來時間必須在上床時間之後。';
+    }
+    final totalTimeInBed = wake.difference(bed).inMinutes;
+    final timeToFallAsleep =
+        _timeToFallAsleepHours * 60 + _timeToFallAsleepMinutes;
+    final timeInBedAfterWaking =
+        _timeInBedAfterWakingHours * 60 + _timeInBedAfterWakingMinutes;
+    if (timeToFallAsleep < 0 || timeInBedAfterWaking < 0) {
+      return '入睡時間或賴床時間不能為負數。';
+    }
+    if (timeToFallAsleep + timeInBedAfterWaking > totalTimeInBed) {
+      return '入睡時間與賴床時間總和不能超過總在床時間。';
+    }
+    // Validate wake up events
+    for (int i = 0; i < _wakeUpEvents.length; i++) {
+      final event = _wakeUpEvents[i];
+      if (event.stayedInBedMinutes < 0) {
+        return '第${i + 1}次醒來的清醒時間不能為負數。';
+      }
+      if (event.gotOutOfBed && (event.outOfBedDurationMinutes ?? 0) < 0) {
+        return '第${i + 1}次醒來的下床時間不能為負數。';
+      }
+    }
+    // Optionally: check that sum of all wake event durations does not exceed total time in bed
+    return null;
+  }
+
+  bool _canMoveToNextPage() {
+    switch (_currentStep) {
+      case 2: // Q3
+        return _hasLeftBed != null &&
+            (_hasLeftBed == false || _leftBedDuration.inMinutes > 0);
+      default:
+        return true;
+    }
   }
 }
