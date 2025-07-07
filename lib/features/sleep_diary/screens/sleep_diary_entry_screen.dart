@@ -52,8 +52,8 @@ class _SleepDiaryEntryScreenState extends State<SleepDiaryEntryScreen> {
   // Other state variables
   int _timeToFallAsleepHours = 0;
   int _timeToFallAsleepMinutes = 0;
-  int _initialOutOfBedHours = 0;
-  int _initialOutOfBedMinutes = 0;
+  final int _initialOutOfBedHours = 0;
+  final int _initialOutOfBedMinutes = 0;
   String? _sleepDifficultyReason;
   int _numberOfAwakenings = 0;
   final List<WakeUpEvent> _wakeUpEvents = [];
@@ -93,7 +93,20 @@ class _SleepDiaryEntryScreenState extends State<SleepDiaryEntryScreen> {
       ];
 
   void _showTimePicker(BuildContext context, DateTime initialTime, String title,
-      Function(DateTime) onTimeSelected) {
+      Function(DateTime) onTimeSelected,
+      {DateTime? minTime, DateTime? maxTime}) {
+    print(
+        'DEBUG: Showing time picker. initialTime = $initialTime, minTime = $minTime, maxTime = $maxTime');
+
+    // Always use bedTime as minimum if not specified
+    final effectiveMinTime = minTime ?? _bedTime;
+
+    // Always use current time as maximum if not specified
+    final effectiveMaxTime = maxTime ?? DateTime.now();
+
+    print(
+        'DEBUG: Time picker range: min = $effectiveMinTime, max = $effectiveMaxTime');
+
     showCupertinoModalPopup<void>(
       context: context,
       builder: (BuildContext context) => Container(
@@ -133,7 +146,49 @@ class _SleepDiaryEntryScreenState extends State<SleepDiaryEntryScreen> {
               child: CupertinoDatePicker(
                 mode: CupertinoDatePickerMode.time,
                 initialDateTime: initialTime,
-                onDateTimeChanged: onTimeSelected,
+                minimumDate: effectiveMinTime,
+                maximumDate: effectiveMaxTime,
+                onDateTimeChanged: (DateTime newTime) {
+                  print('DEBUG: Date picker changed. newTime = $newTime');
+
+                  // Determine if bedTime is after midnight (same day as entry)
+                  final bool isBedTimeAfterMidnight =
+                      _bedTime.day == DateTime.now().day;
+
+                  DateTime adjustedTime;
+                  if (isBedTimeAfterMidnight) {
+                    // Keep all times on the same day as bedTime
+                    adjustedTime = DateTime(
+                      _bedTime.year,
+                      _bedTime.month,
+                      _bedTime.day,
+                      newTime.hour,
+                      newTime.minute,
+                    );
+                  } else {
+                    // If the selected time is before bedTime hour, assume it's next day
+                    if (newTime.hour < _bedTime.hour) {
+                      adjustedTime = DateTime(
+                        _bedTime.year,
+                        _bedTime.month,
+                        _bedTime.day + 1,
+                        newTime.hour,
+                        newTime.minute,
+                      );
+                    } else {
+                      adjustedTime = DateTime(
+                        _bedTime.year,
+                        _bedTime.month,
+                        _bedTime.day,
+                        newTime.hour,
+                        newTime.minute,
+                      );
+                    }
+                  }
+
+                  print('DEBUG: Adjusted time = $adjustedTime');
+                  onTimeSelected(adjustedTime);
+                },
                 use24hFormat: true,
               ),
             ),
@@ -276,11 +331,11 @@ class _SleepDiaryEntryScreenState extends State<SleepDiaryEntryScreen> {
         showCupertinoDialog(
           context: context,
           builder: (context) => CupertinoAlertDialog(
-            title: Row(
+            title: const Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                const Text('✅ '),
-                const Text(
+                Text('✅ '),
+                Text(
                   '已儲存',
                   style: TextStyle(
                     fontFamily: 'SF Pro Display',
@@ -333,39 +388,54 @@ class _SleepDiaryEntryScreenState extends State<SleepDiaryEntryScreen> {
 
   void _addWakeUpEvent() {
     setState(() {
-      DateTime wakeTime;
-      if (_wakeUpEvents.isEmpty) {
-        // First wake-up: 2 hours after bedtime as default
-        wakeTime = DateTime(
-          _bedTime.year,
-          _bedTime.month,
-          _bedTime.day,
-          (_bedTime.hour + 2) % 24,
-          _bedTime.minute,
-        );
-      } else {
-        // Subsequent wake-ups: 2 hours after previous wake-up
+      print('DEBUG: Adding wake-up event. bedTime = $_bedTime');
+
+      // Determine a reasonable default time for the new wake-up event
+      DateTime defaultTime;
+
+      // If there are existing wake-up events, set time after the last one
+      if (_wakeUpEvents.isNotEmpty) {
         final lastEvent = _wakeUpEvents.last;
-        wakeTime = DateTime(
-          lastEvent.time.year,
-          lastEvent.time.month,
-          lastEvent.time.day,
-          (lastEvent.time.hour + 2) % 24,
-          lastEvent.time.minute,
+        defaultTime = lastEvent.time
+            .add(Duration(minutes: lastEvent.stayedInBedMinutes + 30));
+      } else {
+        // If this is the first wake-up event, set it to 2 hours after bedTime
+        defaultTime = _bedTime.add(const Duration(hours: 2));
+      }
+
+      // Make sure the default time is between bedTime and current time
+      final now = DateTime.now();
+      if (defaultTime.isAfter(now)) {
+        defaultTime = _bedTime.add(const Duration(hours: 1));
+      }
+
+      // Handle cross-midnight scenario
+      if (_bedTime.day != now.day && defaultTime.hour < _bedTime.hour) {
+        // If bedTime is previous day and defaultTime is early morning hours,
+        // ensure it's on the next day (current day)
+        defaultTime = DateTime(
+          now.year,
+          now.month,
+          now.day,
+          defaultTime.hour,
+          defaultTime.minute,
         );
       }
 
       _wakeUpEvents.add(
         WakeUpEvent(
-          time: wakeTime,
+          time: defaultTime,
           gotOutOfBed: false,
-          stayedInBedMinutes: 1, // Changed from 5 to 1 minutes as minimum
+          stayedInBedMinutes: 15, // Default to 15 minutes of being awake
         ),
       );
+      print(
+          'DEBUG: Added wake-up event with time = ${_wakeUpEvents.last.time}');
     });
   }
 
   void _updateWakeUpEvent(int index, WakeUpEvent event) {
+    print('DEBUG: Updating wake-up event $index. New time = ${event.time}');
     setState(() {
       _wakeUpEvents[index] = event;
     });
@@ -1052,7 +1122,7 @@ class _SleepDiaryEntryScreenState extends State<SleepDiaryEntryScreen> {
         ),
         const SizedBox(height: 8),
         const Text(
-          '不包括最後起床的那一次',
+          '不包括最後起床的那一次!!!',
           style: TextStyle(
             fontFamily: 'SF Pro Text',
             fontSize: 17,
@@ -1271,15 +1341,47 @@ class _SleepDiaryEntryScreenState extends State<SleepDiaryEntryScreen> {
 
   Widget _buildFinalAwakeningPage() {
     final now = DateTime.now();
-    final minTime = _bedTime;
+    DateTime minTime;
+
+    // If there are wake-up events, final awakening must be after the last wake-up event plus its duration
+    if (_wakeUpEvents.isNotEmpty) {
+      final lastEvent = _wakeUpEvents.last;
+      minTime =
+          lastEvent.time.add(Duration(minutes: lastEvent.stayedInBedMinutes));
+    } else {
+      minTime = _bedTime;
+    }
+
     final maxTime = now;
-    final defaultTime =
-        DateTime(now.year, now.month, now.day, 7, 0); // 07:00 current day
     return _buildTimePicker(
       title: '什麼時候醒來 (起床時間)？',
       subtitle: '選擇你最後一次醒來的時間 (之後起床活動)',
       time: _finalAwakeningTime,
       onChanged: (time) {
+        // Validate final awakening time against last wake-up event
+        if (_wakeUpEvents.isNotEmpty) {
+          final lastEvent = _wakeUpEvents.last;
+          final lastEventEndTime = lastEvent.time
+              .add(Duration(minutes: lastEvent.stayedInBedMinutes));
+          if (time.isBefore(lastEventEndTime)) {
+            showCupertinoDialog(
+              context: context,
+              builder: (context) => CupertinoAlertDialog(
+                title: const Text('時間順序有誤'),
+                content: Text(
+                    '最後起床時間必須晚於最後一次醒來結束的時間 (${DateFormat('HH:mm').format(lastEventEndTime)})'),
+                actions: [
+                  CupertinoDialogAction(
+                    child: const Text('確定'),
+                    onPressed: () => Navigator.of(context).pop(),
+                  ),
+                ],
+              ),
+            );
+            return;
+          }
+        }
+
         setState(() {
           _finalAwakeningTime = DateTime(
             _finalAwakeningTime.year,
@@ -1356,7 +1458,7 @@ class _SleepDiaryEntryScreenState extends State<SleepDiaryEntryScreen> {
         if (_immediateWakeUp == false) ...[
           _buildDurationPicker(
             title: '',
-            subtitle: '選擇賴床的持續時間',
+            subtitle: '賴床了多長時間？',
             hours: _timeInBedAfterWakingHours,
             minutes: _timeInBedAfterWakingMinutes,
             onChanged: (hours, minutes) {
@@ -1474,8 +1576,105 @@ class _SleepDiaryEntryScreenState extends State<SleepDiaryEntryScreen> {
     required DateTime time,
     required Function(DateTime) onTimeSelected,
   }) {
+    print('DEBUG: Building time field. Current time = $time');
     return GestureDetector(
-      onTap: () => _showTimePicker(context, time, label, onTimeSelected),
+      onTap: () {
+        print('DEBUG: Opening time picker. Initial time = $time');
+
+        // Find the index of the current wake-up event
+        final currentIndex =
+            _wakeUpEvents.indexWhere((event) => event.time == time);
+
+        // Calculate minimum time based on previous event if it exists
+        DateTime minTime;
+        if (currentIndex > 0) {
+          final previousEvent = _wakeUpEvents[currentIndex - 1];
+          minTime = previousEvent.time
+              .add(Duration(minutes: previousEvent.stayedInBedMinutes));
+        } else {
+          minTime = _bedTime;
+        }
+
+        // Calculate maximum time based on next event if it exists
+        DateTime? maxTime;
+        if (currentIndex < _wakeUpEvents.length - 1) {
+          maxTime = _wakeUpEvents[currentIndex + 1].time;
+        } else {
+          // Use current time as maximum
+          maxTime = DateTime.now();
+        }
+
+        // Create a custom time picker that doesn't dismiss on scroll
+        showCupertinoModalPopup<void>(
+          context: context,
+          barrierDismissible: true, // Allow tapping outside to dismiss
+          builder: (BuildContext context) {
+            return GestureDetector(
+              // Prevent dismissal when interacting with the container's contents
+              onTap: () {}, // Intercept tap events
+              child: Container(
+                height: 300,
+                color: CupertinoColors.systemBackground,
+                child: SafeArea(
+                  child: Column(
+                    children: [
+                      // Header with buttons
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 16.0, vertical: 8.0),
+                        decoration: const BoxDecoration(
+                          border: Border(
+                            bottom: BorderSide(
+                              color: CupertinoColors.systemGrey5,
+                              width: 0.5,
+                            ),
+                          ),
+                        ),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            CupertinoButton(
+                              padding: EdgeInsets.zero,
+                              child: const Text('取消'),
+                              onPressed: () => Navigator.pop(context),
+                            ),
+                            Text(
+                              label,
+                              style: const TextStyle(
+                                fontFamily: 'SF Pro Text',
+                                fontSize: 17,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                            CupertinoButton(
+                              padding: EdgeInsets.zero,
+                              child: const Text('確定'),
+                              onPressed: () => Navigator.pop(context),
+                            ),
+                          ],
+                        ),
+                      ),
+
+                      // Time picker
+                      Expanded(
+                        child: _buildSimpleTimePicker(
+                          time: time,
+                          onChanged: (newTime) {
+                            print('DEBUG: Time selected in picker = $newTime');
+                            onTimeSelected(newTime);
+                          },
+                          minTime: minTime,
+                          maxTime: maxTime,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            );
+          },
+        );
+      },
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         decoration: BoxDecoration(
@@ -1509,6 +1708,203 @@ class _SleepDiaryEntryScreenState extends State<SleepDiaryEntryScreen> {
           ],
         ),
       ),
+    );
+  }
+
+  // A simpler time picker without extra labels and with better scroll handling
+  Widget _buildSimpleTimePicker({
+    required DateTime time,
+    required Function(DateTime) onChanged,
+    required DateTime minTime,
+    required DateTime? maxTime,
+  }) {
+    // Calculate display date and hint
+    final effectiveMaxTime = maxTime ?? DateTime.now();
+
+    // For Q5: Create a continuous range from bedTime to max time
+    // Calculate total hours from min to max
+    int hoursFromMin;
+    if (minTime.day != effectiveMaxTime.day) {
+      // If spanning days, count hours from min time to midnight, then add hours until max time
+      hoursFromMin = (24 - minTime.hour) + effectiveMaxTime.hour + 1;
+    } else {
+      hoursFromMin = effectiveMaxTime.hour - minTime.hour + 1;
+    }
+
+    // Calculate the current selection's position in the continuous range
+    int selectedPosition;
+    if (time.day == minTime.day) {
+      selectedPosition = time.hour - minTime.hour;
+    } else {
+      selectedPosition = (24 - minTime.hour) + time.hour;
+    }
+
+    // For minutes, limit range if we're at boundary hours
+    bool isAtMinHour = time.day == minTime.day && time.hour == minTime.hour;
+    bool isAtMaxHour =
+        time.day == effectiveMaxTime.day && time.hour == effectiveMaxTime.hour;
+    int minMinute = isAtMinHour ? minTime.minute : 0;
+    int maxMinute = isAtMaxHour ? effectiveMaxTime.minute : 59;
+
+    final hourController =
+        FixedExtentScrollController(initialItem: selectedPosition);
+    final minuteController =
+        FixedExtentScrollController(initialItem: time.minute - minMinute);
+
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        Column(
+          children: [
+            const Text(
+              '小時',
+              style: TextStyle(
+                fontFamily: 'SF Pro Text',
+                fontSize: 15,
+                color: CupertinoColors.label,
+              ),
+            ),
+            const SizedBox(height: 8),
+            SizedBox(
+              width: 80,
+              height: 160,
+              child: NotificationListener<ScrollNotification>(
+                // Prevent scroll events from propagating up the widget tree
+                onNotification: (notification) => true,
+                child: CupertinoPicker(
+                  selectionOverlay: null,
+                  magnification: 1.1,
+                  squeeze: 1.0,
+                  itemExtent: 40,
+                  scrollController: hourController,
+                  onSelectedItemChanged: (int value) {
+                    // Convert the continuous position back to actual date/hour
+                    DateTime newTime;
+                    int newHour;
+                    if (value < (24 - minTime.hour)) {
+                      // Previous day
+                      newHour = minTime.hour + value;
+                      newTime = DateTime(
+                        minTime.year,
+                        minTime.month,
+                        minTime.day,
+                        newHour,
+                        time.minute,
+                      );
+                    } else {
+                      // Current day
+                      newHour = value - (24 - minTime.hour);
+                      newTime = DateTime(
+                        effectiveMaxTime.year,
+                        effectiveMaxTime.month,
+                        effectiveMaxTime.day,
+                        newHour,
+                        time.minute,
+                      );
+                    }
+
+                    // Adjust minutes if needed
+                    int adjustedMinute = time.minute;
+                    if (newTime.day == minTime.day &&
+                        newHour == minTime.hour &&
+                        adjustedMinute < minTime.minute) {
+                      adjustedMinute = minTime.minute;
+                    }
+                    if (newTime.day == effectiveMaxTime.day &&
+                        newHour == effectiveMaxTime.hour &&
+                        adjustedMinute > effectiveMaxTime.minute) {
+                      adjustedMinute = effectiveMaxTime.minute;
+                    }
+
+                    newTime = DateTime(
+                      newTime.year,
+                      newTime.month,
+                      newTime.day,
+                      newHour,
+                      adjustedMinute,
+                    );
+
+                    onChanged(newTime);
+                  },
+                  children: List<Widget>.generate(hoursFromMin, (int index) {
+                    int displayHour;
+                    if (index < (24 - minTime.hour)) {
+                      // Previous day
+                      displayHour = minTime.hour + index;
+                    } else {
+                      // Current day
+                      displayHour = index - (24 - minTime.hour);
+                    }
+                    return Center(
+                      child: Text(
+                        displayHour.toString().padLeft(2, '0'),
+                        style: const TextStyle(
+                          fontFamily: 'SF Pro Text',
+                          fontSize: 22,
+                          color: CupertinoColors.label,
+                        ),
+                      ),
+                    );
+                  }),
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(width: 24),
+        Column(
+          children: [
+            const Text(
+              '分鐘',
+              style: TextStyle(
+                fontFamily: 'SF Pro Text',
+                fontSize: 15,
+                color: CupertinoColors.label,
+              ),
+            ),
+            const SizedBox(height: 8),
+            SizedBox(
+              width: 80,
+              height: 160,
+              child: NotificationListener<ScrollNotification>(
+                // Prevent scroll events from propagating up the widget tree
+                onNotification: (notification) => true,
+                child: CupertinoPicker(
+                  selectionOverlay: null,
+                  magnification: 1.1,
+                  squeeze: 1.0,
+                  itemExtent: 40,
+                  scrollController: minuteController,
+                  onSelectedItemChanged: (int value) {
+                    int newMinute = minMinute + value;
+                    onChanged(DateTime(
+                      time.year,
+                      time.month,
+                      time.day,
+                      time.hour,
+                      newMinute,
+                    ));
+                  },
+                  children: List<Widget>.generate(maxMinute - minMinute + 1,
+                      (int index) {
+                    final minute = minMinute + index;
+                    return Center(
+                      child: Text(
+                        minute.toString().padLeft(2, '0'),
+                        style: const TextStyle(
+                          fontFamily: 'SF Pro Text',
+                          fontSize: 22,
+                          color: CupertinoColors.label,
+                        ),
+                      ),
+                    );
+                  }),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ],
     );
   }
 
