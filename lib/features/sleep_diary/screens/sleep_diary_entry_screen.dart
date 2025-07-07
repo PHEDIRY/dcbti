@@ -13,6 +13,7 @@ class SleepDiaryEntryScreen extends StatefulWidget {
 
 class _SleepDiaryEntryScreenState extends State<SleepDiaryEntryScreen> {
   int _currentStep = 0;
+  bool _q3Skipped = false; // Add this variable to track if Q3 was skipped
 
   // Basic sleep info
   late DateTime _bedTime;
@@ -28,9 +29,11 @@ class _SleepDiaryEntryScreenState extends State<SleepDiaryEntryScreen> {
     // Initialize Q3 selection as null (no selection)
     _hasLeftBed = null;
     _leftBedDuration = Duration.zero;
+
     // Set default times using DateTime.now() as base to ensure correct date
     final now = DateTime.now();
     final yesterday = now.subtract(const Duration(days: 1));
+
     // Q1: Default bedtime is 23:00 previous day
     _bedTime = DateTime(
       yesterday.year,
@@ -39,6 +42,7 @@ class _SleepDiaryEntryScreenState extends State<SleepDiaryEntryScreen> {
       23, // 23:00 default
       0,
     );
+
     // Q7: Default wake time is 07:00 current day
     _finalAwakeningTime = DateTime(
       now.year,
@@ -52,8 +56,6 @@ class _SleepDiaryEntryScreenState extends State<SleepDiaryEntryScreen> {
   // Other state variables
   int _timeToFallAsleepHours = 0;
   int _timeToFallAsleepMinutes = 0;
-  final int _initialOutOfBedHours = 0;
-  final int _initialOutOfBedMinutes = 0;
   String? _sleepDifficultyReason;
   int _numberOfAwakenings = 0;
   final List<WakeUpEvent> _wakeUpEvents = [];
@@ -86,26 +88,66 @@ class _SleepDiaryEntryScreenState extends State<SleepDiaryEntryScreen> {
         _buildWakeUpDifficultyReasonPage(),
         _buildFinalAwakeningPage(),
         _buildImmediateWakeUpPage(),
-        _buildTimeInBedAfterWakingPage(),
+        // _buildTimeInBedAfterWakingPage(), // Removed Q9
         _buildSleepQualityPage(),
         _buildConsumptionEventsPage(),
         _buildTagsPage(),
       ];
 
+  // Check if the current page is valid to enable the "continue" button
+  bool _isCurrentPageValid() {
+    switch (_currentStep) {
+      // Q1: Bed time - always valid as it has default value
+      case 0:
+        return true;
+      // Q2: Time to fall asleep - always valid as it has default value
+      case 1:
+        return true;
+      // Q3: Left bed during falling asleep
+      case 2:
+        // Only validate if not skipped (Q2 >= 3 minutes)
+        if (_timeToFallAsleepHours > 0 || _timeToFallAsleepMinutes >= 3) {
+          return _hasLeftBed != null;
+        }
+        return true;
+      // Q4: Sleep difficulty reason
+      case 3:
+        return _sleepDifficultyReason != null;
+      // Q5: Number of awakenings - always valid as it has default value
+      case 4:
+        return true;
+      // Q6: Wake up difficulty reason
+      case 5:
+        // Make Q6 mandatory, same as Q4
+        return _wakeUpDifficultyReason != null;
+      // Q7: Final awakening time - always valid as it has default value
+      case 6:
+        return true;
+      // Q8: Immediate wake up
+      case 7:
+        return _immediateWakeUp != null;
+      // Q9: Sleep quality
+      case 8:
+        return _sleepQuality != null;
+      // Q10: Consumption events - always valid as it's optional
+      case 9:
+        return true;
+      // Q11: Tags - always valid as it's optional
+      case 10:
+        return true;
+      default:
+        return true;
+    }
+  }
+
   void _showTimePicker(BuildContext context, DateTime initialTime, String title,
       Function(DateTime) onTimeSelected,
       {DateTime? minTime, DateTime? maxTime}) {
-    print(
-        'DEBUG: Showing time picker. initialTime = $initialTime, minTime = $minTime, maxTime = $maxTime');
-
     // Always use bedTime as minimum if not specified
     final effectiveMinTime = minTime ?? _bedTime;
 
     // Always use current time as maximum if not specified
     final effectiveMaxTime = maxTime ?? DateTime.now();
-
-    print(
-        'DEBUG: Time picker range: min = $effectiveMinTime, max = $effectiveMaxTime');
 
     showCupertinoModalPopup<void>(
       context: context,
@@ -149,8 +191,6 @@ class _SleepDiaryEntryScreenState extends State<SleepDiaryEntryScreen> {
                 minimumDate: effectiveMinTime,
                 maximumDate: effectiveMaxTime,
                 onDateTimeChanged: (DateTime newTime) {
-                  print('DEBUG: Date picker changed. newTime = $newTime');
-
                   // Determine if bedTime is after midnight (same day as entry)
                   final bool isBedTimeAfterMidnight =
                       _bedTime.day == DateTime.now().day;
@@ -186,7 +226,6 @@ class _SleepDiaryEntryScreenState extends State<SleepDiaryEntryScreen> {
                     }
                   }
 
-                  print('DEBUG: Adjusted time = $adjustedTime');
                   onTimeSelected(adjustedTime);
                 },
                 use24hFormat: true,
@@ -285,7 +324,7 @@ class _SleepDiaryEntryScreenState extends State<SleepDiaryEntryScreen> {
       return;
     }
     final entry = SleepDiaryEntry.create(
-      entryDate: _bedTime,
+      entryDate: DateTime.now(), // Set to current day
       bedTime: _bedTime,
       wakeTime: _finalAwakeningTime,
       timeToFallAsleepMinutes:
@@ -293,8 +332,9 @@ class _SleepDiaryEntryScreenState extends State<SleepDiaryEntryScreen> {
       numberOfAwakenings: _numberOfAwakenings,
       wakeUpEvents: _wakeUpEvents,
       finalAwakeningTime: _finalAwakeningTime,
-      timeInBedAfterWakingMinutes:
-          _timeInBedAfterWakingHours * 60 + _timeInBedAfterWakingMinutes,
+      timeInBedAfterWakingMinutes: _immediateWakeUp == true
+          ? 0
+          : _timeInBedAfterWakingHours * 60 + _timeInBedAfterWakingMinutes,
       sleepQuality: _sleepQuality ?? 0.0,
       caffeineConsumption: _caffeineConsumption,
       alcoholConsumption: _alcoholConsumption,
@@ -307,8 +347,9 @@ class _SleepDiaryEntryScreenState extends State<SleepDiaryEntryScreen> {
       sleepDifficultyReason: _sleepDifficultyReason,
       wakeUpDifficultyReason: _wakeUpDifficultyReason,
       immediateWakeUp: _immediateWakeUp ?? false,
-      initialOutOfBedDurationMinutes:
-          _initialOutOfBedHours * 60 + _initialOutOfBedMinutes,
+      initialOutOfBedDurationMinutes: _q3Skipped
+          ? 0
+          : (_hasLeftBed == true ? _leftBedDuration.inMinutes : 0),
     );
 
     final service = SleepDiaryService();
@@ -345,7 +386,7 @@ class _SleepDiaryEntryScreenState extends State<SleepDiaryEntryScreen> {
               ],
             ),
             content: Text(
-              '你的睡眠日記已經儲存成功！\n${DateFormat('yyyy年M月d日 (E)', 'zh_TW').format(_bedTime)}',
+              '你的睡眠日記已經儲存成功！\n${DateFormat('yyyy年M月d日 (E)', 'zh_TW').format(DateTime.now())}',
               style: const TextStyle(
                 fontFamily: 'SF Pro Text',
                 fontSize: 13,
@@ -388,8 +429,6 @@ class _SleepDiaryEntryScreenState extends State<SleepDiaryEntryScreen> {
 
   void _addWakeUpEvent() {
     setState(() {
-      print('DEBUG: Adding wake-up event. bedTime = $_bedTime');
-
       // Determine a reasonable default time for the new wake-up event
       DateTime defaultTime;
 
@@ -429,13 +468,10 @@ class _SleepDiaryEntryScreenState extends State<SleepDiaryEntryScreen> {
           stayedInBedMinutes: 15, // Default to 15 minutes of being awake
         ),
       );
-      print(
-          'DEBUG: Added wake-up event with time = ${_wakeUpEvents.last.time}');
     });
   }
 
   void _updateWakeUpEvent(int index, WakeUpEvent event) {
-    print('DEBUG: Updating wake-up event $index. New time = ${event.time}');
     setState(() {
       _wakeUpEvents[index] = event;
     });
@@ -502,6 +538,10 @@ class _SleepDiaryEntryScreenState extends State<SleepDiaryEntryScreen> {
               ? () {
                   setState(() {
                     _currentStep--;
+                    // If going back from Q4 to Q2 (skipping Q3)
+                    if (_q3Skipped && _currentStep == 2) {
+                      _currentStep--;
+                    }
                   });
                 }
               : () {
@@ -545,7 +585,8 @@ class _SleepDiaryEntryScreenState extends State<SleepDiaryEntryScreen> {
                   child: Column(
                     children: [
                       Text(
-                        DateFormat('yyyy年M月d日 (E)', 'zh_TW').format(_bedTime),
+                        DateFormat('yyyy年M月d日 (E)', 'zh_TW')
+                            .format(DateTime.now()),
                         style: const TextStyle(
                           fontFamily: 'SF Pro Text',
                           fontSize: 15,
@@ -630,6 +671,9 @@ class _SleepDiaryEntryScreenState extends State<SleepDiaryEntryScreen> {
   }
 
   Widget _buildNavigationButton() {
+    // Check if the current page is valid
+    final bool isValid = _isCurrentPageValid();
+
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: const BoxDecoration(
@@ -658,16 +702,29 @@ class _SleepDiaryEntryScreenState extends State<SleepDiaryEntryScreen> {
               SizedBox(
                 width: double.infinity,
                 child: CupertinoButton.filled(
-                  onPressed: () {
-                    setState(() {
-                      // Always skip Q9 (index 8) since it's merged with Q8
-                      if (_currentStep == 7) {
-                        _currentStep += 2;
-                      } else {
-                        _currentStep++;
-                      }
-                    });
-                  },
+                  // Disable the button if the current page is not valid
+                  onPressed: isValid
+                      ? () {
+                          setState(() {
+                            // Skip Q3 if Q2 is less than 3 minutes
+                            if (_currentStep == 1 &&
+                                _timeToFallAsleepHours == 0 &&
+                                _timeToFallAsleepMinutes < 3) {
+                              _currentStep += 2;
+                              _q3Skipped = true; // Set flag when skipping Q3
+                              // Remove the line that sets _hasLeftBed to false
+                            }
+                            // Skip Q9 if user selected "Yes" for immediate wake up in Q8
+                            else if (_currentStep == 7 &&
+                                _immediateWakeUp == true) {
+                              _currentStep +=
+                                  1; // Updated to +1 since we removed Q9
+                            } else {
+                              _currentStep++;
+                            }
+                          });
+                        }
+                      : null,
                   child: const Text('繼續'),
                 ),
               ),
@@ -697,7 +754,7 @@ class _SleepDiaryEntryScreenState extends State<SleepDiaryEntryScreen> {
       }
     }
     final dateHint =
-        '你選擇的日期與時間：${DateFormat('yyyy年M月d日 HH:mm', 'zh_TW').format(displayDate)}';
+        '選擇的日期與時間：${DateFormat('yyyy年M月d日 HH:mm', 'zh_TW').format(displayDate)}';
 
     // --- Custom hour/minute picker logic ---
     final min = minTime ?? time;
@@ -930,7 +987,7 @@ class _SleepDiaryEntryScreenState extends State<SleepDiaryEntryScreen> {
     final maxTime = now; // Current time
     return _buildTimePicker(
       title: '你什麼時候上床睡覺？',
-      subtitle: '選擇你躺到床上準備睡覺的時間',
+      subtitle: '躺到床上準備睡覺的時間',
       time: _bedTime,
       onChanged: (time) {
         setState(() {
@@ -947,7 +1004,7 @@ class _SleepDiaryEntryScreenState extends State<SleepDiaryEntryScreen> {
   Widget _buildTimeToFallAsleepPage() {
     return _buildDurationPicker(
       title: '躺上床後，花了多長時間才入睡？',
-      subtitle: '從躺到床上到入睡花了多少時間',
+      subtitle: '',
       hours: _timeToFallAsleepHours,
       minutes: _timeToFallAsleepMinutes,
       onChanged: (hours, minutes) {
@@ -960,6 +1017,12 @@ class _SleepDiaryEntryScreenState extends State<SleepDiaryEntryScreen> {
   }
 
   Widget _buildLeftBedPage() {
+    // Calculate maximum duration based on Q2
+    final int maxMinutes =
+        _timeToFallAsleepHours * 60 + _timeToFallAsleepMinutes;
+    final int maxHours = maxMinutes ~/ 60;
+    final int remainingMinutes = maxMinutes % 60;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -981,6 +1044,10 @@ class _SleepDiaryEntryScreenState extends State<SleepDiaryEntryScreen> {
                 _hasLeftBed = option == '是';
                 if (option == '否') {
                   _leftBedDuration = Duration.zero;
+                } else if (_leftBedDuration.inMinutes == 0) {
+                  // Initialize with a default value if selecting "Yes"
+                  _leftBedDuration =
+                      Duration(minutes: maxMinutes > 5 ? 5 : maxMinutes);
                 }
               }),
               child: Container(
@@ -1020,6 +1087,8 @@ class _SleepDiaryEntryScreenState extends State<SleepDiaryEntryScreen> {
             subtitle: '選擇離開床舖的持續時間',
             hours: _leftBedDuration.inHours,
             minutes: _leftBedDuration.inMinutes.remainder(60),
+            maxHours: maxHours,
+            maxMinutes: remainingMinutes,
             onChanged: (int hours, int minutes) {
               setState(() {
                 _leftBedDuration = Duration(hours: hours, minutes: minutes);
@@ -1355,7 +1424,7 @@ class _SleepDiaryEntryScreenState extends State<SleepDiaryEntryScreen> {
     final maxTime = now;
     return _buildTimePicker(
       title: '什麼時候醒來 (起床時間)？',
-      subtitle: '選擇你最後一次醒來的時間 (之後起床活動)',
+      subtitle: '起床之後就不再回去睡了，開始一天的活動',
       time: _finalAwakeningTime,
       onChanged: (time) {
         // Validate final awakening time against last wake-up event
@@ -1422,6 +1491,10 @@ class _SleepDiaryEntryScreenState extends State<SleepDiaryEntryScreen> {
                 if (option == '是') {
                   _timeInBedAfterWakingHours = 0;
                   _timeInBedAfterWakingMinutes = 0;
+                } else if (option == '否') {
+                  // Set default values for time in bed after waking
+                  _timeInBedAfterWakingHours = 0;
+                  _timeInBedAfterWakingMinutes = 15; // Default to 15 minutes
                 }
               }),
               child: Container(
@@ -1456,6 +1529,16 @@ class _SleepDiaryEntryScreenState extends State<SleepDiaryEntryScreen> {
           }).toList(),
         ),
         if (_immediateWakeUp == false) ...[
+          const SizedBox(height: 16),
+          const Text(
+            '如果沒有立即起床，請選擇賴床時間',
+            style: TextStyle(
+              fontFamily: 'SF Pro Text',
+              fontSize: 17,
+              color: CupertinoColors.systemGrey,
+            ),
+          ),
+          const SizedBox(height: 16),
           _buildDurationPicker(
             title: '',
             subtitle: '賴床了多長時間？',
@@ -1474,14 +1557,51 @@ class _SleepDiaryEntryScreenState extends State<SleepDiaryEntryScreen> {
   }
 
   Widget _buildTimeInBedAfterWakingPage() {
-    return Container(); // Empty page that will be skipped
+    // This page is only shown if the user selected "No" for immediate wake up
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          '醒來後，賴床了多長時間？',
+          style: TextStyle(
+            fontFamily: 'SF Pro Display',
+            fontSize: 24,
+            fontWeight: FontWeight.bold,
+            color: CupertinoColors.label,
+          ),
+        ),
+        const SizedBox(height: 8),
+        const Text(
+          '從醒來到實際起身離開床舖的時間',
+          style: TextStyle(
+            fontFamily: 'SF Pro Text',
+            fontSize: 17,
+            color: CupertinoColors.systemGrey,
+          ),
+        ),
+        const SizedBox(height: 24),
+        _buildDurationPicker(
+          title: '',
+          subtitle: '',
+          hours: _timeInBedAfterWakingHours,
+          minutes: _timeInBedAfterWakingMinutes,
+          onChanged: (hours, minutes) {
+            setState(() {
+              _timeInBedAfterWakingHours = hours;
+              _timeInBedAfterWakingMinutes = minutes;
+            });
+          },
+        ),
+      ],
+    );
   }
 
   Widget _buildSleepQualityPage() {
     final qualities = [
-      {'value': 4.0, 'label': '很好', 'subtext': '精神飽滿、心情愉悅', 'emoji': '😊'},
-      {'value': 3.0, 'label': '還不錯', 'subtext': '有點疲憊，但可以應付', 'emoji': '🙂'},
-      {'value': 2.0, 'label': '不太好', 'subtext': '疲憊、昏沉', 'emoji': '😐'},
+      {'value': 5.0, 'label': '很好', 'subtext': '精神飽滿、心情愉悅', 'emoji': '😊'},
+      {'value': 4.0, 'label': '不錯', 'subtext': '有精神、心情良好', 'emoji': '🙂'},
+      {'value': 3.0, 'label': '普通', 'subtext': '一般、不好不壞', 'emoji': '😐'},
+      {'value': 2.0, 'label': '不太好', 'subtext': '疲憊、昏沉', 'emoji': '😕'},
       {'value': 1.0, 'label': '很差', 'subtext': '非常疲憊、無法集中注意力', 'emoji': '😞'},
     ];
 
@@ -1576,11 +1696,8 @@ class _SleepDiaryEntryScreenState extends State<SleepDiaryEntryScreen> {
     required DateTime time,
     required Function(DateTime) onTimeSelected,
   }) {
-    print('DEBUG: Building time field. Current time = $time');
     return GestureDetector(
       onTap: () {
-        print('DEBUG: Opening time picker. Initial time = $time');
-
         // Find the index of the current wake-up event
         final currentIndex =
             _wakeUpEvents.indexWhere((event) => event.time == time);
@@ -1660,7 +1777,6 @@ class _SleepDiaryEntryScreenState extends State<SleepDiaryEntryScreen> {
                         child: _buildSimpleTimePicker(
                           time: time,
                           onChanged: (newTime) {
-                            print('DEBUG: Time selected in picker = $newTime');
                             onTimeSelected(newTime);
                           },
                           minTime: minTime,
@@ -2363,15 +2479,6 @@ class _SleepDiaryEntryScreenState extends State<SleepDiaryEntryScreen> {
             color: CupertinoColors.label,
           ),
         ),
-        const SizedBox(height: 8),
-        const Text(
-          '選擇所有符合的項目',
-          style: TextStyle(
-            fontFamily: 'SF Pro Text',
-            fontSize: 17,
-            color: CupertinoColors.systemGrey,
-          ),
-        ),
         const SizedBox(height: 24),
         _buildTagSection(
           title: '🌞日間活動',
@@ -2391,50 +2498,6 @@ class _SleepDiaryEntryScreenState extends State<SleepDiaryEntryScreen> {
         _buildTagSection(
           title: '⚡睡眠干擾',
           tags: SleepTags.sleepDisturbances,
-        ),
-      ],
-    );
-  }
-
-  Widget _buildNotesSection() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text(
-          '備註',
-          style: TextStyle(
-            fontFamily: 'SF Pro Text',
-            fontSize: 17,
-            fontWeight: FontWeight.w600,
-            color: CupertinoColors.systemGrey,
-          ),
-        ),
-        const SizedBox(height: 8),
-        Container(
-          decoration: BoxDecoration(
-            color: CupertinoColors.systemBackground,
-            borderRadius: BorderRadius.circular(8),
-            border: Border.all(
-              color: CupertinoColors.systemGrey5,
-              width: 1,
-            ),
-          ),
-          child: CupertinoTextField(
-            controller: _notesController,
-            placeholder: '添加備註...',
-            padding: const EdgeInsets.all(12),
-            maxLines: 4,
-            style: const TextStyle(
-              fontFamily: 'SF Pro Text',
-              fontSize: 17,
-            ),
-            placeholderStyle: const TextStyle(
-              fontFamily: 'SF Pro Text',
-              fontSize: 17,
-              color: CupertinoColors.systemGrey,
-            ),
-            decoration: null,
-          ),
         ),
       ],
     );
@@ -2579,71 +2642,24 @@ class _SleepDiaryEntryScreenState extends State<SleepDiaryEntryScreen> {
     }
   }
 
-  Widget _buildNotesPage() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text(
-          '有什麼想記錄的嗎？',
-          style: TextStyle(
-            fontFamily: 'SF Pro Display',
-            fontSize: 24,
-            fontWeight: FontWeight.bold,
-            color: CupertinoColors.label,
-          ),
-        ),
-        const SizedBox(height: 8),
-        const Text(
-          '記錄任何可能影響你睡眠的事情',
-          style: TextStyle(
-            fontFamily: 'SF Pro Text',
-            fontSize: 17,
-            color: CupertinoColors.systemGrey,
-          ),
-        ),
-        const SizedBox(height: 24),
-        Container(
-          decoration: BoxDecoration(
-            color: CupertinoColors.systemBackground,
-            borderRadius: BorderRadius.circular(8),
-            border: Border.all(
-              color: CupertinoColors.systemGrey5,
-              width: 1,
-            ),
-          ),
-          child: CupertinoTextField(
-            controller: _notesController,
-            placeholder: '添加備註...',
-            padding: const EdgeInsets.all(12),
-            maxLines: 4,
-            style: const TextStyle(
-              fontFamily: 'SF Pro Text',
-              fontSize: 17,
-            ),
-            placeholderStyle: const TextStyle(
-              fontFamily: 'SF Pro Text',
-              fontSize: 17,
-              color: CupertinoColors.systemGrey,
-            ),
-            decoration: null,
-          ),
-        ),
-      ],
-    );
-  }
-
   Widget _buildDurationPicker({
     required String title,
     required String subtitle,
     required int hours,
     required int minutes,
     required Function(int hours, int minutes) onChanged,
+    int? maxHours,
+    int? maxMinutes,
   }) {
     // Always start at 0 unless user has picked a value
     final hourController =
         FixedExtentScrollController(initialItem: hours == 0 ? 0 : hours);
     final minuteController =
         FixedExtentScrollController(initialItem: minutes == 0 ? 0 : minutes);
+
+    // Calculate maximum hours and minutes
+    final effectiveMaxHours = maxHours ?? 23;
+    final effectiveMaxMinutes = maxMinutes ?? 59;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -2669,7 +2685,7 @@ class _SleepDiaryEntryScreenState extends State<SleepDiaryEntryScreen> {
         const SizedBox(height: 24),
         Center(
           child: Text(
-            '選擇的時間: ${hours.toString().padLeft(2, '0')} 小時 ${minutes.toString().padLeft(2, '0')} 分鐘',
+            '選擇的時長: ${hours.toString().padLeft(2, '0')} 小時 ${minutes.toString().padLeft(2, '0')} 分鐘',
             style: const TextStyle(
               fontFamily: 'SF Pro Text',
               fontSize: 17,
@@ -2703,9 +2719,16 @@ class _SleepDiaryEntryScreenState extends State<SleepDiaryEntryScreen> {
                     itemExtent: 40,
                     scrollController: hourController,
                     onSelectedItemChanged: (int value) {
-                      onChanged(value, minutes);
+                      // If at max hours, ensure minutes are within range
+                      int newMinutes = minutes;
+                      if (value == effectiveMaxHours &&
+                          minutes > effectiveMaxMinutes) {
+                        newMinutes = effectiveMaxMinutes;
+                      }
+                      onChanged(value, newMinutes);
                     },
-                    children: List<Widget>.generate(24, (int index) {
+                    children: List<Widget>.generate(effectiveMaxHours + 1,
+                        (int index) {
                       return Center(
                         child: Text(
                           index.toString().padLeft(2, '0'),
@@ -2744,9 +2767,17 @@ class _SleepDiaryEntryScreenState extends State<SleepDiaryEntryScreen> {
                     itemExtent: 40,
                     scrollController: minuteController,
                     onSelectedItemChanged: (int value) {
+                      // If at max hours, ensure minutes are within range
+                      if (hours == effectiveMaxHours &&
+                          value > effectiveMaxMinutes) {
+                        value = effectiveMaxMinutes;
+                      }
                       onChanged(hours, value);
                     },
-                    children: List<Widget>.generate(60, (int index) {
+                    children: List<Widget>.generate(
+                        hours == effectiveMaxHours
+                            ? effectiveMaxMinutes + 1
+                            : 60, (int index) {
                       return Center(
                         child: Text(
                           index.toString().padLeft(2, '0'),
@@ -2783,14 +2814,44 @@ class _SleepDiaryEntryScreenState extends State<SleepDiaryEntryScreen> {
     final totalTimeInBed = wake.difference(bed).inMinutes;
     final timeToFallAsleep =
         _timeToFallAsleepHours * 60 + _timeToFallAsleepMinutes;
-    final timeInBedAfterWaking =
-        _timeInBedAfterWakingHours * 60 + _timeInBedAfterWakingMinutes;
+    final timeInBedAfterWaking = _immediateWakeUp == true
+        ? 0
+        : _timeInBedAfterWakingHours * 60 + _timeInBedAfterWakingMinutes;
     if (timeToFallAsleep < 0 || timeInBedAfterWaking < 0) {
       return '入睡時間或賴床時間不能為負數。';
     }
     if (timeToFallAsleep + timeInBedAfterWaking > totalTimeInBed) {
       return '入睡時間與賴床時間總和不能超過總在床時間。';
     }
+
+    // Check mandatory fields - already validated by _isCurrentPageValid
+    // These checks are kept as a final safety check
+
+    // Q3 (if not skipped)
+    if (timeToFallAsleep >= 3 && !_q3Skipped && _hasLeftBed == null) {
+      return '請選擇是否有離開床舖。';
+    }
+
+    // Q4
+    if (_sleepDifficultyReason == null) {
+      return '請選擇睡不著的原因。';
+    }
+
+    // Q6
+    if (_wakeUpDifficultyReason == null) {
+      return '請選擇醒著的原因。';
+    }
+
+    // Q8
+    if (_immediateWakeUp == null) {
+      return '請選擇是否在醒來五分鐘內起身。';
+    }
+
+    // Q9 (now Q9 is sleep quality)
+    if (_sleepQuality == null) {
+      return '請評價你的睡眠品質。';
+    }
+
     // Validate wake up events
     for (int i = 0; i < _wakeUpEvents.length; i++) {
       final event = _wakeUpEvents[i];
@@ -2801,17 +2862,6 @@ class _SleepDiaryEntryScreenState extends State<SleepDiaryEntryScreen> {
         return '第${i + 1}次醒來的下床時間不能為負數。';
       }
     }
-    // Optionally: check that sum of all wake event durations does not exceed total time in bed
     return null;
-  }
-
-  bool _canMoveToNextPage() {
-    switch (_currentStep) {
-      case 2: // Q3
-        return _hasLeftBed != null &&
-            (_hasLeftBed == false || _leftBedDuration.inMinutes > 0);
-      default:
-        return true;
-    }
   }
 }

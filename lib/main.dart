@@ -255,7 +255,7 @@ class _HomePageState extends State<HomePage> {
                   color: CupertinoColors.systemGrey,
                 ),
               ),
-              SizedBox(height: 4),
+              const SizedBox(height: 4),
               Text(
                 'User ID: ${currentUser.uid}',
                 style: const TextStyle(
