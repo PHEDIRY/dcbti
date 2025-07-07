@@ -51,6 +51,13 @@ class _SleepDiaryEntryScreenState extends State<SleepDiaryEntryScreen> {
       7, // 07:00 default
       0,
     );
+
+    // Add listener to notes controller to update character count
+    _notesController.addListener(() {
+      setState(() {
+        // This will trigger a rebuild when text changes
+      });
+    });
   }
 
   // Other state variables
@@ -92,6 +99,7 @@ class _SleepDiaryEntryScreenState extends State<SleepDiaryEntryScreen> {
         _buildSleepQualityPage(),
         _buildConsumptionEventsPage(),
         _buildTagsPage(),
+        _buildNotesPage(),
       ];
 
   // Check if the current page is valid to enable the "continue" button
@@ -300,6 +308,7 @@ class _SleepDiaryEntryScreenState extends State<SleepDiaryEntryScreen> {
 
   @override
   void dispose() {
+    _notesController.removeListener(() {});
     _notesController.dispose();
     super.dispose();
   }
@@ -1598,10 +1607,10 @@ class _SleepDiaryEntryScreenState extends State<SleepDiaryEntryScreen> {
 
   Widget _buildSleepQualityPage() {
     final qualities = [
-      {'value': 5.0, 'label': '很好', 'subtext': '精神飽滿、心情愉悅', 'emoji': '😊'},
+      {'value': 5.0, 'label': '很好', 'subtext': '精神飽滿、煥然一新', 'emoji': '😊'},
       {'value': 4.0, 'label': '不錯', 'subtext': '有精神、心情良好', 'emoji': '🙂'},
-      {'value': 3.0, 'label': '普通', 'subtext': '一般、不好不壞', 'emoji': '😐'},
-      {'value': 2.0, 'label': '不太好', 'subtext': '疲憊、昏沉', 'emoji': '😕'},
+      {'value': 3.0, 'label': '普通', 'subtext': '沒什麼差別、一般', 'emoji': '😐'},
+      {'value': 2.0, 'label': '不太好', 'subtext': '疲憊、昏沉、想睡覺', 'emoji': '😕'},
       {'value': 1.0, 'label': '很差', 'subtext': '非常疲憊、無法集中注意力', 'emoji': '😞'},
     ];
 
@@ -2863,5 +2872,66 @@ class _SleepDiaryEntryScreenState extends State<SleepDiaryEntryScreen> {
       }
     }
     return null;
+  }
+
+  // Add the _buildNotesPage method
+  Widget _buildNotesPage() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          '其他附註',
+          style: TextStyle(
+            fontFamily: 'SF Pro Display',
+            fontSize: 24,
+            fontWeight: FontWeight.bold,
+            color: CupertinoColors.label,
+          ),
+        ),
+        const SizedBox(height: 8),
+        const Text(
+          '可以補充任何跟這次睡眠相關的事項或細節',
+          style: TextStyle(
+            fontFamily: 'SF Pro Text',
+            fontSize: 17,
+            color: CupertinoColors.systemGrey,
+          ),
+        ),
+        const SizedBox(height: 24),
+        Container(
+          decoration: BoxDecoration(
+            color: CupertinoColors.systemBackground,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: CupertinoColors.systemGrey5,
+              width: 1,
+            ),
+          ),
+          child: CupertinoTextField(
+            controller: _notesController,
+            placeholder: '請輸入附註（最多50字）',
+            padding: const EdgeInsets.all(16),
+            maxLength: 50,
+            maxLines: 4,
+            decoration: null,
+            style: const TextStyle(
+              fontFamily: 'SF Pro Text',
+              fontSize: 17,
+              color: CupertinoColors.label,
+            ),
+          ),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          '${_notesController.text.length}/50',
+          style: const TextStyle(
+            fontFamily: 'SF Pro Text',
+            fontSize: 13,
+            color: CupertinoColors.systemGrey,
+          ),
+          textAlign: TextAlign.end,
+        ),
+      ],
+    );
   }
 }
