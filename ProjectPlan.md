@@ -115,8 +115,8 @@ Authentication state management (provider, bloc, or riverpod)
 User profile basic setup
 
 4. Sleep Diary Module
-Data models for diary entries (do this)
-UI for daily entry (do this)
+Data models for diary entries (done)
+UI for daily entry (done)
 - date of the entry
 - what time did you get into bed?
 - quality rating
@@ -134,8 +134,8 @@ UI for daily entry (do this)
 - during the previous day (between sleeping periods) did you exercise? if yes, at what time?
 - during the previous day (between sleeping periods) when did you have your last meal or night snacks?
 - select all tags that were relevant to your sleep: daytime activities (exercise, nap longer than 30 min, sunlight within 30 min of waking, yoga, caffeine after 12pm), bedtime activities (stretching, meditation, reading, eat within 3 hours of bed, journaling, alcohol within 3 hours of bed, shower, worked late, socialized late, screen time within 1 hour of bed, CAPA therapy), bedtime substances (sleeping pills, melatonin, supplements/herbs, CBD/THC, nicotine/tobacco, other medications), sleep distrubance (stress/racing thoughts, nightmares, light, noises, temperature, snoring, woke for bathroom, kids/partner/pets, travel/jet lag, pain/illness/injury)
-CRUD operations with Firestore
-List/history view of diary entries
+CRUD operations with Firestore (done)
+List/history view of diary entries (do this)
 
 5. Assessment Module
 Data models for ISI, PSQI, depression/anxiety

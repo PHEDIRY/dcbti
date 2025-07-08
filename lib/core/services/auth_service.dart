@@ -20,7 +20,7 @@ class AuthService {
       if (user != null) {
         // Create a profile for the new anonymous user
         await _userService.createOrUpdateProfile(
-          displayName: 'Anonymous User',
+          displayName: '匿名使用者',
         );
         print('[AuthService] Created profile for anonymous user: ${user.uid}');
       }

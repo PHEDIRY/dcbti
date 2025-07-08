@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'features/sleep_diary/screens/sleep_diary_entry_screen.dart';
+import 'features/sleep_diary/screens/sleep_diary_list_screen.dart';
 import 'features/auth/screens/auth_screen.dart';
 import 'features/auth/screens/auth_screen.dart' show LandingScreen;
 import 'firebase_options.dart';
@@ -196,9 +197,12 @@ class HomePage extends StatefulWidget {
 class _HomePageState extends State<HomePage> {
   final AuthService _authService = AuthService();
 
-  Future<void> _signInAsNewUser() async {
-    await _authService.signOut(); // Sign out current user
-    await _authService.signInAnonymously(); // Sign in as new anonymous user
+  void _navigateToSleepDiaryList() {
+    Navigator.of(context).push(
+      CupertinoPageRoute(
+        builder: (context) => const SleepDiaryListScreen(),
+      ),
+    );
   }
 
   @override
@@ -247,8 +251,8 @@ class _HomePageState extends State<HomePage> {
             if (currentUser != null) ...[
               Text(
                 currentUser.isAnonymous
-                    ? '訪客用戶'
-                    : currentUser.email ?? currentUser.displayName ?? '',
+                    ? '匿名使用者'
+                    : '使用者: ${currentUser.email ?? currentUser.uid}',
                 style: const TextStyle(
                   fontFamily: 'SF Pro Text',
                   fontSize: 15,
@@ -257,7 +261,7 @@ class _HomePageState extends State<HomePage> {
               ),
               const SizedBox(height: 4),
               Text(
-                'User ID: ${currentUser.uid}',
+                'ID: ${currentUser.uid}',
                 style: const TextStyle(
                   fontFamily: 'SF Pro Text',
                   fontSize: 13,
@@ -270,93 +274,38 @@ class _HomePageState extends State<HomePage> {
               padding: const EdgeInsets.all(16.0),
               child: Column(
                 children: [
-                  _buildFeatureButton(
-                    context,
-                    icon: CupertinoIcons.moon_stars,
-                    label: '睡眠日記',
+                  // Sleep Diary Button
+                  CupertinoButton.filled(
+                    onPressed: _navigateToSleepDiaryList,
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const Icon(CupertinoIcons.moon_fill),
+                        const SizedBox(width: 8),
+                        const Text('睡眠日記'),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  // Add New Entry Button (Direct)
+                  CupertinoButton(
                     onPressed: () {
-                      Navigator.push(
-                        context,
+                      Navigator.of(context).push(
                         CupertinoPageRoute(
                           builder: (context) => const SleepDiaryEntryScreen(),
                         ),
                       );
                     },
-                  ),
-                  const SizedBox(height: 16),
-                  _buildFeatureButton(
-                    context,
-                    icon: CupertinoIcons.chart_bar,
-                    label: '睡眠分析',
-                    onPressed: () {
-                      // TODO: Implement sleep analysis navigation
-                    },
-                  ),
-                  const SizedBox(height: 16),
-                  _buildFeatureButton(
-                    context,
-                    icon: CupertinoIcons.book,
-                    label: '教育內容',
-                    onPressed: () {
-                      // TODO: Implement education content navigation
-                    },
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const Icon(CupertinoIcons.add_circled),
+                        const SizedBox(width: 8),
+                        const Text('新增睡眠日記'),
+                      ],
+                    ),
                   ),
                 ],
-              ),
-            ),
-            const Spacer(),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildFeatureButton(
-    BuildContext context, {
-    required IconData icon,
-    required String label,
-    required VoidCallback onPressed,
-  }) {
-    return CupertinoButton(
-      onPressed: onPressed,
-      padding: EdgeInsets.zero,
-      child: Container(
-        width: double.infinity,
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: CupertinoColors.systemBackground,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(
-            color: CupertinoColors.systemGrey5,
-            width: 1,
-          ),
-        ),
-        child: Row(
-          children: [
-            Material(
-              type: MaterialType.transparency,
-              child: Icon(
-                icon,
-                color: CupertinoTheme.of(context).primaryColor,
-                size: 28,
-              ),
-            ),
-            const SizedBox(width: 12),
-            Text(
-              label,
-              style: const TextStyle(
-                fontFamily: 'SF Pro Text',
-                fontSize: 17,
-                fontWeight: FontWeight.w500,
-                color: CupertinoColors.label,
-              ),
-            ),
-            const Spacer(),
-            const Material(
-              type: MaterialType.transparency,
-              child: Icon(
-                CupertinoIcons.chevron_right,
-                color: CupertinoColors.systemGrey2,
               ),
             ),
           ],

@@ -14,6 +14,8 @@ class SleepDiaryEntryScreen extends StatefulWidget {
 class _SleepDiaryEntryScreenState extends State<SleepDiaryEntryScreen> {
   int _currentStep = 0;
   bool _q3Skipped = false; // Add this variable to track if Q3 was skipped
+  bool _showValidationWarnings =
+      false; // Add this variable to track when to show validation warnings
 
   // Basic sleep info
   late DateTime _bedTime;
@@ -121,8 +123,29 @@ class _SleepDiaryEntryScreenState extends State<SleepDiaryEntryScreen> {
       // Q4: Sleep difficulty reason
       case 3:
         return _sleepDifficultyReason != null;
-      // Q5: Number of awakenings - always valid as it has default value
+      // Q5: Number of awakenings - validate that all wake-up events have times selected
       case 4:
+        if (_numberOfAwakenings > 0) {
+          // Check if all wake-up events have times selected
+          for (int i = 0; i < _wakeUpEvents.length; i++) {
+            if (_wakeUpEvents[i].time == null) {
+              return false;
+            }
+          }
+
+          // Also validate that wake-up times are in chronological order
+          for (int i = 1; i < _wakeUpEvents.length; i++) {
+            final prevEvent = _wakeUpEvents[i - 1];
+            final currentEvent = _wakeUpEvents[i];
+
+            final prevEndTime = prevEvent.time!
+                .add(Duration(minutes: prevEvent.stayedInBedMinutes));
+
+            if (currentEvent.time!.isBefore(prevEndTime)) {
+              return false;
+            }
+          }
+        }
         return true;
       // Q6: Wake up difficulty reason
       case 5:
@@ -332,14 +355,19 @@ class _SleepDiaryEntryScreenState extends State<SleepDiaryEntryScreen> {
       );
       return;
     }
+
+    // Ensure all wake-up events have times before creating the entry
+    final validatedWakeUpEvents =
+        _wakeUpEvents.where((event) => event.time != null).toList();
+
     final entry = SleepDiaryEntry.create(
       entryDate: DateTime.now(), // Set to current day
       bedTime: _bedTime,
       wakeTime: _finalAwakeningTime,
       timeToFallAsleepMinutes:
           _timeToFallAsleepHours * 60 + _timeToFallAsleepMinutes,
-      numberOfAwakenings: _numberOfAwakenings,
-      wakeUpEvents: _wakeUpEvents,
+      numberOfAwakenings: validatedWakeUpEvents.length, // Use validated count
+      wakeUpEvents: validatedWakeUpEvents, // Use validated events
       finalAwakeningTime: _finalAwakeningTime,
       timeInBedAfterWakingMinutes: _immediateWakeUp == true
           ? 0
@@ -438,41 +466,36 @@ class _SleepDiaryEntryScreenState extends State<SleepDiaryEntryScreen> {
 
   void _addWakeUpEvent() {
     setState(() {
-      // Determine a reasonable default time for the new wake-up event
-      DateTime defaultTime;
+      // No default time - we'll show a placeholder instead
+      DateTime? wakeUpTime;
 
-      // If there are existing wake-up events, set time after the last one
+      // Calculate minimum allowed time for this wake-up event
+      DateTime minTime;
+
+      // If there are existing wake-up events, min time is after the last one
       if (_wakeUpEvents.isNotEmpty) {
         final lastEvent = _wakeUpEvents.last;
-        defaultTime = lastEvent.time
-            .add(Duration(minutes: lastEvent.stayedInBedMinutes + 30));
+        if (lastEvent.time != null) {
+          minTime = lastEvent.time!
+              .add(Duration(minutes: lastEvent.stayedInBedMinutes));
+        } else {
+          // If previous event has no time yet, use bedTime + sleep latency
+          minTime = _bedTime.add(Duration(
+            hours: _timeToFallAsleepHours,
+            minutes: _timeToFallAsleepMinutes,
+          ));
+        }
       } else {
-        // If this is the first wake-up event, set it to 2 hours after bedTime
-        defaultTime = _bedTime.add(const Duration(hours: 2));
-      }
-
-      // Make sure the default time is between bedTime and current time
-      final now = DateTime.now();
-      if (defaultTime.isAfter(now)) {
-        defaultTime = _bedTime.add(const Duration(hours: 1));
-      }
-
-      // Handle cross-midnight scenario
-      if (_bedTime.day != now.day && defaultTime.hour < _bedTime.hour) {
-        // If bedTime is previous day and defaultTime is early morning hours,
-        // ensure it's on the next day (current day)
-        defaultTime = DateTime(
-          now.year,
-          now.month,
-          now.day,
-          defaultTime.hour,
-          defaultTime.minute,
-        );
+        // If this is the first wake-up event, set min time to bedTime + sleep latency
+        minTime = _bedTime.add(Duration(
+          hours: _timeToFallAsleepHours,
+          minutes: _timeToFallAsleepMinutes,
+        ));
       }
 
       _wakeUpEvents.add(
         WakeUpEvent(
-          time: defaultTime,
+          time: wakeUpTime,
           gotOutOfBed: false,
           stayedInBedMinutes: 15, // Default to 15 minutes of being awake
         ),
@@ -714,6 +737,29 @@ class _SleepDiaryEntryScreenState extends State<SleepDiaryEntryScreen> {
                   // Disable the button if the current page is not valid
                   onPressed: isValid
                       ? () {
+                          // Check for specific validation errors
+                          if (_currentStep == 4 && _numberOfAwakenings > 0) {
+                            // Validate wake-up times before proceeding
+                            String? validationError = _validateWakeUpTimes();
+                            if (validationError != null) {
+                              showCupertinoDialog(
+                                context: context,
+                                builder: (context) => CupertinoAlertDialog(
+                                  title: const Text('時間順序有誤'),
+                                  content: Text(validationError),
+                                  actions: [
+                                    CupertinoDialogAction(
+                                      child: const Text('確定'),
+                                      onPressed: () =>
+                                          Navigator.of(context).pop(),
+                                    ),
+                                  ],
+                                ),
+                              );
+                              return;
+                            }
+                          }
+
                           setState(() {
                             // Skip Q3 if Q2 is less than 3 minutes
                             if (_currentStep == 1 &&
@@ -721,7 +767,6 @@ class _SleepDiaryEntryScreenState extends State<SleepDiaryEntryScreen> {
                                 _timeToFallAsleepMinutes < 3) {
                               _currentStep += 2;
                               _q3Skipped = true; // Set flag when skipping Q3
-                              // Remove the line that sets _hasLeftBed to false
                             }
                             // Skip Q9 if user selected "Yes" for immediate wake up in Q8
                             else if (_currentStep == 7 &&
@@ -731,9 +776,20 @@ class _SleepDiaryEntryScreenState extends State<SleepDiaryEntryScreen> {
                             } else {
                               _currentStep++;
                             }
+
+                            // Reset validation warnings when moving to next question
+                            _showValidationWarnings = false;
                           });
                         }
-                      : null,
+                      : () {
+                          // If button is disabled and we're on Q5 (wake-up events),
+                          // show validation warnings
+                          if (_currentStep == 4 && _numberOfAwakenings > 0) {
+                            setState(() {
+                              _showValidationWarnings = true;
+                            });
+                          }
+                        },
                   child: const Text('繼續'),
                 ),
               ),
@@ -741,6 +797,45 @@ class _SleepDiaryEntryScreenState extends State<SleepDiaryEntryScreen> {
         ),
       ),
     );
+  }
+
+  // New method to validate wake-up times
+  String? _validateWakeUpTimes() {
+    // Check if all wake-up events have times selected
+    for (int i = 0; i < _wakeUpEvents.length; i++) {
+      if (_wakeUpEvents[i].time == null) {
+        return '請為第 ${i + 1} 次醒來選擇時間';
+      }
+    }
+
+    // Check if wake-up times are in chronological order
+    for (int i = 1; i < _wakeUpEvents.length; i++) {
+      final prevEvent = _wakeUpEvents[i - 1];
+      final currentEvent = _wakeUpEvents[i];
+
+      // Safe to use ! here as we've checked for null above
+      final prevEndTime =
+          prevEvent.time!.add(Duration(minutes: prevEvent.stayedInBedMinutes));
+
+      if (currentEvent.time!.isBefore(prevEndTime)) {
+        return '第 ${i + 1} 次醒來時間必須晚於第 $i 次醒來結束時間 (${DateFormat('HH:mm').format(prevEndTime)})';
+      }
+    }
+
+    // Check if the first wake-up time is after bedTime + sleep latency
+    final sleepLatency = Duration(
+      hours: _timeToFallAsleepHours,
+      minutes: _timeToFallAsleepMinutes,
+    );
+    final earliestWakeUpTime = _bedTime.add(sleepLatency);
+
+    if (_wakeUpEvents.isNotEmpty &&
+        _wakeUpEvents[0].time != null &&
+        _wakeUpEvents[0].time!.isBefore(earliestWakeUpTime)) {
+      return '第 1 次醒來時間必須晚於入睡時間 (${DateFormat('HH:mm').format(earliestWakeUpTime)})';
+    }
+
+    return null;
   }
 
   Widget _buildTimePicker({
@@ -1185,6 +1280,65 @@ class _SleepDiaryEntryScreenState extends State<SleepDiaryEntryScreen> {
     );
   }
 
+  // Add a method to check if a specific wake-up event's time is valid
+  String? _validateWakeUpEventTime(int index) {
+    final event = _wakeUpEvents[index];
+
+    // If no time selected, show a hint
+    if (event.time == null) {
+      return '請選擇醒來時間';
+    }
+
+    // Calculate minimum allowed time
+    DateTime minTime;
+
+    // If this is not the first event, min time is after the previous event
+    if (index > 0) {
+      final prevEvent = _wakeUpEvents[index - 1];
+      if (prevEvent.time != null) {
+        minTime = prevEvent.time!
+            .add(Duration(minutes: prevEvent.stayedInBedMinutes));
+
+        // Check if time is after previous event's end time
+        if (event.time!.isBefore(minTime)) {
+          return '時間必須晚於上一次醒來結束時間 (${DateFormat('HH:mm').format(minTime)})';
+        }
+      }
+    } else {
+      // If this is the first wake-up event, min time is bedTime + sleep latency
+      minTime = _bedTime.add(Duration(
+        hours: _timeToFallAsleepHours,
+        minutes: _timeToFallAsleepMinutes,
+      ));
+
+      // Check if time is after sleep latency
+      if (event.time!.isBefore(minTime)) {
+        return '時間必須晚於入睡時間 (${DateFormat('HH:mm').format(minTime)})';
+      }
+    }
+
+    // Check if time is before next event's time (if any)
+    if (index < _wakeUpEvents.length - 1) {
+      final nextEvent = _wakeUpEvents[index + 1];
+      if (nextEvent.time != null) {
+        final thisEventEndTime =
+            event.time!.add(Duration(minutes: event.stayedInBedMinutes));
+        if (thisEventEndTime.isAfter(nextEvent.time!)) {
+          return '清醒時間太長，會與下一次醒來時間重疊';
+        }
+      }
+    }
+
+    // Check if time is before final awakening time
+    final eventEndTime =
+        event.time!.add(Duration(minutes: event.stayedInBedMinutes));
+    if (eventEndTime.isAfter(_finalAwakeningTime)) {
+      return '清醒時間太長，會超過最後起床時間';
+    }
+
+    return null;
+  }
+
   Widget _buildNumberOfAwakeningsPage() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1200,7 +1354,7 @@ class _SleepDiaryEntryScreenState extends State<SleepDiaryEntryScreen> {
         ),
         const SizedBox(height: 8),
         const Text(
-          '不包括最後起床的那一次!!!',
+          '不包括最後起床的那一次',
           style: TextStyle(
             fontFamily: 'SF Pro Text',
             fontSize: 17,
@@ -1220,6 +1374,8 @@ class _SleepDiaryEntryScreenState extends State<SleepDiaryEntryScreen> {
               while (_wakeUpEvents.length > value) {
                 _wakeUpEvents.removeLast();
               }
+              // Reset validation warnings when changing the number of events
+              _showValidationWarnings = false;
             });
           },
           suffix: '次',
@@ -1229,6 +1385,11 @@ class _SleepDiaryEntryScreenState extends State<SleepDiaryEntryScreen> {
           ..._wakeUpEvents.asMap().entries.map((entry) {
             final index = entry.key;
             final event = entry.value;
+            // Get validation message for this event only if we should show warnings
+            final validationError = _showValidationWarnings
+                ? _validateWakeUpEventTime(index)
+                : null;
+
             return Container(
               margin: const EdgeInsets.only(bottom: 16),
               decoration: BoxDecoration(
@@ -1254,20 +1415,33 @@ class _SleepDiaryEntryScreenState extends State<SleepDiaryEntryScreen> {
                       ),
                     ),
                     const SizedBox(height: 16),
-                    _buildTimeField(
-                      label: '醒來時間',
-                      time: event.time,
-                      onTimeSelected: (time) => _updateWakeUpEvent(
-                        index,
-                        WakeUpEvent(
-                          time: time,
-                          gotOutOfBed: event.gotOutOfBed,
-                          outOfBedDurationMinutes:
-                              event.outOfBedDurationMinutes,
-                          stayedInBedMinutes: event.stayedInBedMinutes,
-                        ),
-                      ),
+                    _buildWakeUpTimeField(
+                      index: index,
+                      event: event,
                     ),
+                    if (validationError != null) ...[
+                      const SizedBox(height: 8),
+                      Row(
+                        children: [
+                          const Icon(
+                            CupertinoIcons.exclamationmark_triangle_fill,
+                            color: CupertinoColors.systemRed,
+                            size: 16,
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              validationError,
+                              style: const TextStyle(
+                                fontFamily: 'SF Pro Text',
+                                fontSize: 13,
+                                color: CupertinoColors.systemRed,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
                     const SizedBox(height: 16),
                     _buildNumberInput(
                       title: '清醒時長',
@@ -1338,6 +1512,175 @@ class _SleepDiaryEntryScreenState extends State<SleepDiaryEntryScreen> {
           }).toList(),
         ],
       ],
+    );
+  }
+
+  // New method to build wake-up time field with proper constraints
+  Widget _buildWakeUpTimeField({
+    required int index,
+    required WakeUpEvent event,
+  }) {
+    // Calculate minimum time for this wake-up event
+    DateTime minTime;
+
+    // If this is not the first event, min time is after the previous event
+    if (index > 0) {
+      final prevEvent = _wakeUpEvents[index - 1];
+      if (prevEvent.time != null) {
+        minTime = prevEvent.time!
+            .add(Duration(minutes: prevEvent.stayedInBedMinutes));
+      } else {
+        // If previous event has no time yet, use bedTime + sleep latency
+        minTime = _bedTime.add(Duration(
+          hours: _timeToFallAsleepHours,
+          minutes: _timeToFallAsleepMinutes,
+        ));
+      }
+    } else {
+      // If this is the first wake-up event, min time is bedTime + sleep latency
+      minTime = _bedTime.add(Duration(
+        hours: _timeToFallAsleepHours,
+        minutes: _timeToFallAsleepMinutes,
+      ));
+    }
+
+    return GestureDetector(
+      onTap: () {
+        // Show time picker with appropriate constraints
+        _showWakeUpTimePicker(
+          context: context,
+          event: event,
+          minTime: minTime,
+          onTimeSelected: (newTime) {
+            _updateWakeUpEvent(
+              index,
+              WakeUpEvent(
+                time: newTime,
+                gotOutOfBed: event.gotOutOfBed,
+                outOfBedDurationMinutes: event.outOfBedDurationMinutes,
+                stayedInBedMinutes: event.stayedInBedMinutes,
+              ),
+            );
+            // Reset validation warnings when user selects a new time
+            setState(() {
+              _showValidationWarnings = false;
+            });
+          },
+        );
+      },
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        decoration: BoxDecoration(
+          color: CupertinoColors.systemBackground,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(
+            color: CupertinoColors.systemGrey5,
+            width: 1,
+          ),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            const Text(
+              '醒來時間',
+              style: TextStyle(
+                fontFamily: 'SF Pro Text',
+                fontSize: 17,
+                color: CupertinoColors.label,
+              ),
+            ),
+            Text(
+              event.time != null
+                  ? DateFormat('HH:mm').format(event.time!)
+                  : '請選擇醒來時間',
+              style: TextStyle(
+                fontFamily: 'SF Pro Display',
+                fontSize: 17,
+                fontWeight: FontWeight.w500,
+                color: event.time != null
+                    ? CupertinoColors.activeBlue
+                    : CupertinoColors.systemGrey,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // New method for wake-up time picker with proper constraints
+  void _showWakeUpTimePicker({
+    required BuildContext context,
+    required WakeUpEvent event,
+    required DateTime minTime,
+    required Function(DateTime) onTimeSelected,
+  }) {
+    // Max time is current time
+    final maxTime = DateTime.now();
+
+    // Initial time is either the existing time or the minimum allowed time
+    final initialTime = event.time ?? minTime;
+
+    showCupertinoModalPopup<void>(
+      context: context,
+      builder: (BuildContext context) => Container(
+        height: 300,
+        color: CupertinoColors.systemBackground,
+        child: SafeArea(
+          child: Column(
+            children: [
+              // Header with buttons
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+                decoration: const BoxDecoration(
+                  border: Border(
+                    bottom: BorderSide(
+                      color: CupertinoColors.systemGrey5,
+                      width: 0.5,
+                    ),
+                  ),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    CupertinoButton(
+                      padding: EdgeInsets.zero,
+                      child: const Text('取消'),
+                      onPressed: () => Navigator.pop(context),
+                    ),
+                    const Text(
+                      '醒來時間',
+                      style: TextStyle(
+                        fontFamily: 'SF Pro Text',
+                        fontSize: 17,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    CupertinoButton(
+                      padding: EdgeInsets.zero,
+                      child: const Text('確定'),
+                      onPressed: () => Navigator.pop(context),
+                    ),
+                  ],
+                ),
+              ),
+
+              // Time picker
+              Expanded(
+                child: _buildSimpleTimePicker(
+                  time: initialTime,
+                  onChanged: (newTime) {
+                    onTimeSelected(newTime);
+                  },
+                  minTime: minTime,
+                  maxTime: maxTime,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 
@@ -1424,8 +1767,12 @@ class _SleepDiaryEntryScreenState extends State<SleepDiaryEntryScreen> {
     // If there are wake-up events, final awakening must be after the last wake-up event plus its duration
     if (_wakeUpEvents.isNotEmpty) {
       final lastEvent = _wakeUpEvents.last;
-      minTime =
-          lastEvent.time.add(Duration(minutes: lastEvent.stayedInBedMinutes));
+      if (lastEvent.time != null) {
+        minTime = lastEvent.time!
+            .add(Duration(minutes: lastEvent.stayedInBedMinutes));
+      } else {
+        minTime = _bedTime;
+      }
     } else {
       minTime = _bedTime;
     }
@@ -1439,24 +1786,26 @@ class _SleepDiaryEntryScreenState extends State<SleepDiaryEntryScreen> {
         // Validate final awakening time against last wake-up event
         if (_wakeUpEvents.isNotEmpty) {
           final lastEvent = _wakeUpEvents.last;
-          final lastEventEndTime = lastEvent.time
-              .add(Duration(minutes: lastEvent.stayedInBedMinutes));
-          if (time.isBefore(lastEventEndTime)) {
-            showCupertinoDialog(
-              context: context,
-              builder: (context) => CupertinoAlertDialog(
-                title: const Text('時間順序有誤'),
-                content: Text(
-                    '最後起床時間必須晚於最後一次醒來結束的時間 (${DateFormat('HH:mm').format(lastEventEndTime)})'),
-                actions: [
-                  CupertinoDialogAction(
-                    child: const Text('確定'),
-                    onPressed: () => Navigator.of(context).pop(),
-                  ),
-                ],
-              ),
-            );
-            return;
+          if (lastEvent.time != null) {
+            final lastEventEndTime = lastEvent.time!
+                .add(Duration(minutes: lastEvent.stayedInBedMinutes));
+            if (time.isBefore(lastEventEndTime)) {
+              showCupertinoDialog(
+                context: context,
+                builder: (context) => CupertinoAlertDialog(
+                  title: const Text('時間順序有誤'),
+                  content: Text(
+                      '最後起床時間必須晚於最後一次醒來結束的時間 (${DateFormat('HH:mm').format(lastEventEndTime)})'),
+                  actions: [
+                    CupertinoDialogAction(
+                      child: const Text('確定'),
+                      onPressed: () => Navigator.of(context).pop(),
+                    ),
+                  ],
+                ),
+              );
+              return;
+            }
           }
         }
 
@@ -1715,8 +2064,12 @@ class _SleepDiaryEntryScreenState extends State<SleepDiaryEntryScreen> {
         DateTime minTime;
         if (currentIndex > 0) {
           final previousEvent = _wakeUpEvents[currentIndex - 1];
-          minTime = previousEvent.time
-              .add(Duration(minutes: previousEvent.stayedInBedMinutes));
+          if (previousEvent.time != null) {
+            minTime = previousEvent.time!
+                .add(Duration(minutes: previousEvent.stayedInBedMinutes));
+          } else {
+            minTime = _bedTime;
+          }
         } else {
           minTime = _bedTime;
         }
@@ -2844,6 +3197,14 @@ class _SleepDiaryEntryScreenState extends State<SleepDiaryEntryScreen> {
     // Q4
     if (_sleepDifficultyReason == null) {
       return '請選擇睡不著的原因。';
+    }
+
+    // Q5 - Validate wake-up times
+    if (_numberOfAwakenings > 0) {
+      String? wakeUpValidationError = _validateWakeUpTimes();
+      if (wakeUpValidationError != null) {
+        return wakeUpValidationError;
+      }
     }
 
     // Q6

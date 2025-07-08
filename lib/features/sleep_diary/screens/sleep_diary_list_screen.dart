@@ -1,0 +1,481 @@
+import 'package:flutter/cupertino.dart';
+import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
+import '../../../core/models/sleep_diary_entry.dart';
+import '../../../core/services/sleep_diary_service.dart';
+import 'sleep_diary_entry_screen.dart';
+
+class SleepDiaryListScreen extends StatefulWidget {
+  const SleepDiaryListScreen({super.key});
+
+  @override
+  State<SleepDiaryListScreen> createState() => _SleepDiaryListScreenState();
+}
+
+class _SleepDiaryListScreenState extends State<SleepDiaryListScreen> {
+  final SleepDiaryService _diaryService = SleepDiaryService();
+  List<SleepDiaryEntry> _entries = [];
+  bool _isLoading = true;
+  String? _errorMessage;
+  final ScrollController _scrollController = ScrollController();
+  bool _isRefreshing = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadEntries();
+  }
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _loadEntries() async {
+    if (_isRefreshing) return;
+
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
+    });
+
+    try {
+      final entries = await _diaryService.getEntries();
+      setState(() {
+        _entries = entries;
+        _isLoading = false;
+        _isRefreshing = false;
+      });
+    } catch (e) {
+      setState(() {
+        _errorMessage = '載入失敗：${e.toString()}';
+        _isLoading = false;
+        _isRefreshing = false;
+      });
+    }
+  }
+
+  Future<void> _handleRefresh() async {
+    setState(() {
+      _isRefreshing = true;
+    });
+    await _loadEntries();
+  }
+
+  Future<void> _deleteEntry(String id) async {
+    try {
+      await _diaryService.deleteEntry(id);
+      setState(() {
+        _entries.removeWhere((entry) => entry.id == id);
+      });
+    } catch (e) {
+      if (mounted) {
+        showCupertinoDialog(
+          context: context,
+          builder: (context) => CupertinoAlertDialog(
+            title: const Text('刪除失敗'),
+            content: Text(e.toString()),
+            actions: [
+              CupertinoDialogAction(
+                child: const Text('確定'),
+                onPressed: () => Navigator.of(context).pop(),
+              ),
+            ],
+          ),
+        );
+      }
+    }
+  }
+
+  void _navigateToEntryScreen() {
+    Navigator.of(context)
+        .push(
+          CupertinoPageRoute(
+            builder: (context) => const SleepDiaryEntryScreen(),
+          ),
+        )
+        .then((_) => _loadEntries());
+  }
+
+  String _formatDuration(Duration duration) {
+    final hours = duration.inHours;
+    final minutes = duration.inMinutes % 60;
+
+    if (hours > 0) {
+      return '$hours小時 $minutes分鐘';
+    } else {
+      return '$minutes分鐘';
+    }
+  }
+
+  Widget _buildEntryCard(SleepDiaryEntry entry) {
+    final dateFormat = DateFormat('yyyy年MM月dd日');
+    final timeFormat = DateFormat('HH:mm');
+
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      decoration: BoxDecoration(
+        color: CupertinoColors.systemBackground,
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: [
+          BoxShadow(
+            color: CupertinoColors.systemGrey5.withOpacity(0.5),
+            blurRadius: 10,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(12),
+        child: CupertinoContextMenu(
+          actions: [
+            CupertinoContextMenuAction(
+              isDestructiveAction: true,
+              trailingIcon: CupertinoIcons.delete,
+              onPressed: () {
+                Navigator.of(context).pop();
+                showCupertinoDialog(
+                  context: context,
+                  builder: (context) => CupertinoAlertDialog(
+                    title: const Text('確認刪除'),
+                    content: const Text('確定要刪除這筆睡眠日記嗎？此操作無法復原。'),
+                    actions: [
+                      CupertinoDialogAction(
+                        child: const Text('取消'),
+                        onPressed: () => Navigator.of(context).pop(),
+                      ),
+                      CupertinoDialogAction(
+                        isDestructiveAction: true,
+                        child: const Text('刪除'),
+                        onPressed: () {
+                          Navigator.of(context).pop();
+                          _deleteEntry(entry.id);
+                        },
+                      ),
+                    ],
+                  ),
+                );
+              },
+              child: const Text('刪除'),
+            ),
+          ],
+          child: Container(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      dateFormat.format(entry.entryDate),
+                      style: const TextStyle(
+                        fontFamily: 'SF Pro Text',
+                        fontSize: 17,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: CupertinoColors.systemBlue.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(
+                            CupertinoIcons.star_fill,
+                            size: 14,
+                            color: CupertinoColors.systemYellow,
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            '${entry.sleepQuality}',
+                            style: const TextStyle(
+                              fontFamily: 'SF Pro Text',
+                              fontSize: 14,
+                              fontWeight: FontWeight.w500,
+                              color: CupertinoColors.systemBlue,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            '就寢時間',
+                            style: TextStyle(
+                              fontFamily: 'SF Pro Text',
+                              fontSize: 13,
+                              color: CupertinoColors.systemGrey,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            timeFormat.format(entry.bedTime),
+                            style: const TextStyle(
+                              fontFamily: 'SF Pro Text',
+                              fontSize: 17,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const Icon(
+                      CupertinoIcons.arrow_right,
+                      color: CupertinoColors.systemGrey,
+                    ),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            '起床時間',
+                            style: TextStyle(
+                              fontFamily: 'SF Pro Text',
+                              fontSize: 13,
+                              color: CupertinoColors.systemGrey,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            timeFormat.format(entry.wakeTime),
+                            style: const TextStyle(
+                              fontFamily: 'SF Pro Text',
+                              fontSize: 17,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            '睡眠時間',
+                            style: TextStyle(
+                              fontFamily: 'SF Pro Text',
+                              fontSize: 13,
+                              color: CupertinoColors.systemGrey,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            _formatDuration(entry.sleepDuration),
+                            style: const TextStyle(
+                              fontFamily: 'SF Pro Text',
+                              fontSize: 17,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            '入睡時間',
+                            style: TextStyle(
+                              fontFamily: 'SF Pro Text',
+                              fontSize: 13,
+                              color: CupertinoColors.systemGrey,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            '${entry.timeToFallAsleepMinutes}分鐘',
+                            style: const TextStyle(
+                              fontFamily: 'SF Pro Text',
+                              fontSize: 17,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                if (entry.sleepTags.isNotEmpty) ...[
+                  const SizedBox(height: 12),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      ...entry.sleepTags.take(3).map((tag) {
+                        return Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 8, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: CupertinoColors.systemGrey5,
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Text(
+                            tag,
+                            style: const TextStyle(
+                              fontFamily: 'SF Pro Text',
+                              fontSize: 12,
+                              color: CupertinoColors.systemGrey,
+                            ),
+                          ),
+                        );
+                      }).toList(),
+
+                      // Show +X more if there are more than 3 tags
+                      if (entry.sleepTags.length > 3)
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 8, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: CupertinoColors.systemGrey5,
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Text(
+                            '+${entry.sleepTags.length - 3}',
+                            style: const TextStyle(
+                              fontFamily: 'SF Pro Text',
+                              fontSize: 12,
+                              color: CupertinoColors.systemGrey,
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return CupertinoPageScaffold(
+      navigationBar: const CupertinoNavigationBar(
+        middle: Text('睡眠日記'),
+      ),
+      child: SafeArea(
+        child: Stack(
+          children: [
+            if (_isLoading && !_isRefreshing)
+              const Center(
+                child: CupertinoActivityIndicator(),
+              )
+            else if (_errorMessage != null)
+              Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text(
+                      _errorMessage!,
+                      style: const TextStyle(color: CupertinoColors.systemRed),
+                    ),
+                    const SizedBox(height: 16),
+                    CupertinoButton(
+                      onPressed: _loadEntries,
+                      child: const Text('重試'),
+                    ),
+                  ],
+                ),
+              )
+            else if (_entries.isEmpty)
+              Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Icon(
+                      CupertinoIcons.moon_zzz_fill,
+                      size: 64,
+                      color: CupertinoColors.systemGrey,
+                    ),
+                    const SizedBox(height: 16),
+                    const Text(
+                      '尚無睡眠日記',
+                      style: TextStyle(
+                        fontFamily: 'SF Pro Text',
+                        fontSize: 20,
+                        fontWeight: FontWeight.w600,
+                        color: CupertinoColors.systemGrey,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    const Text(
+                      '點擊下方按鈕新增您的第一筆睡眠日記',
+                      style: TextStyle(
+                        fontFamily: 'SF Pro Text',
+                        fontSize: 16,
+                        color: CupertinoColors.systemGrey,
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+                    CupertinoButton.filled(
+                      onPressed: _navigateToEntryScreen,
+                      child: const Text('新增睡眠日記'),
+                    ),
+                  ],
+                ),
+              )
+            else
+              CustomScrollView(
+                controller: _scrollController,
+                physics: const AlwaysScrollableScrollPhysics(),
+                slivers: [
+                  CupertinoSliverRefreshControl(
+                    onRefresh: _handleRefresh,
+                  ),
+                  SliverPadding(
+                    padding: const EdgeInsets.only(bottom: 100),
+                    sliver: SliverList(
+                      delegate: SliverChildBuilderDelegate(
+                        (context, index) => _buildEntryCard(_entries[index]),
+                        childCount: _entries.length,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+
+            // Add button
+            if (!_isLoading && (_entries.isNotEmpty || _errorMessage != null))
+              Positioned(
+                right: 16,
+                bottom: 16,
+                child: CupertinoButton(
+                  padding: const EdgeInsets.all(16),
+                  color: CupertinoColors.activeBlue,
+                  borderRadius: BorderRadius.circular(30),
+                  child: const Icon(
+                    CupertinoIcons.add,
+                    color: CupertinoColors.white,
+                  ),
+                  onPressed: _navigateToEntryScreen,
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}

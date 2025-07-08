@@ -166,8 +166,9 @@ class _AuthScreenState extends State<AuthScreen> {
               CupertinoButton(
                 onPressed: () async {
                   await _authService.signInAnonymously();
+                  if (mounted) Navigator.of(context).pop();
                 },
-                child: const Text('以訪客身份繼續'),
+                child: const Text('匿名使用'),
               ),
             ],
           ),
@@ -256,7 +257,7 @@ class _LandingScreenState extends State<LandingScreen> {
                 ),
                 textAlign: TextAlign.center,
               ),
-              const SizedBox(height: 32),
+              const Spacer(),
               if (_errorMessage != null) ...[
                 Text(
                   _errorMessage!,
@@ -278,15 +279,14 @@ class _LandingScreenState extends State<LandingScreen> {
                       ),
                     );
                   },
-                  child: const Text('註冊/登入帳號'),
+                  child: const Text('註冊/登入'),
                 ),
                 const SizedBox(height: 16),
                 CupertinoButton(
                   onPressed: _signInAnonymously,
-                  child: const Text('以訪客身份繼續'),
+                  child: const Text('匿名使用者'),
                 ),
               ],
-              const Spacer(),
             ],
           ),
         ),

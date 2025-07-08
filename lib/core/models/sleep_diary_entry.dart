@@ -248,7 +248,7 @@ class SleepDiaryEntry {
 }
 
 class WakeUpEvent {
-  final DateTime time;
+  final DateTime? time;
   final bool gotOutOfBed;
   final int? outOfBedDurationMinutes;
   final int stayedInBedMinutes;
@@ -262,7 +262,7 @@ class WakeUpEvent {
 
   Map<String, dynamic> toMap() {
     return {
-      'time': Timestamp.fromDate(time),
+      'time': time != null ? Timestamp.fromDate(time!) : null,
       'gotOutOfBed': gotOutOfBed,
       'outOfBedDurationMinutes': outOfBedDurationMinutes,
       'stayedInBedMinutes': stayedInBedMinutes,
@@ -271,7 +271,7 @@ class WakeUpEvent {
 
   factory WakeUpEvent.fromMap(Map<String, dynamic> map) {
     return WakeUpEvent(
-      time: (map['time'] as Timestamp).toDate(),
+      time: map['time'] != null ? (map['time'] as Timestamp).toDate() : null,
       gotOutOfBed: map['gotOutOfBed'] as bool,
       outOfBedDurationMinutes: map['outOfBedDurationMinutes'] as int?,
       stayedInBedMinutes: map['stayedInBedMinutes'] as int,
