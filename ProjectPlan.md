@@ -135,7 +135,7 @@ UI for daily entry (done)
 - during the previous day (between sleeping periods) when did you have your last meal or night snacks?
 - select all tags that were relevant to your sleep: daytime activities (exercise, nap longer than 30 min, sunlight within 30 min of waking, yoga, caffeine after 12pm), bedtime activities (stretching, meditation, reading, eat within 3 hours of bed, journaling, alcohol within 3 hours of bed, shower, worked late, socialized late, screen time within 1 hour of bed, CAPA therapy), bedtime substances (sleeping pills, melatonin, supplements/herbs, CBD/THC, nicotine/tobacco, other medications), sleep distrubance (stress/racing thoughts, nightmares, light, noises, temperature, snoring, woke for bathroom, kids/partner/pets, travel/jet lag, pain/illness/injury)
 CRUD operations with Firestore (done)
-List/history view of diary entries (do this)
+List/history view of diary entries (done)
 
 5. Assessment Module
 Data models for ISI, PSQI, depression/anxiety
@@ -154,8 +154,17 @@ UI for module navigation and content display
 Progress tracking
 
 8. Sleep Data Analysis Module
-Data aggregation and calculation logic
-Visualization widgets (charts, graphs)
+Data aggregation and calculation logic (do this)
+- SOL: sleep onset latency
+- WASO: total duration of wake after sleep onset
+- WASO_N: Number of wake after sleep onset
+- WASO_duration_n: duration of the nth wake after sleep onset
+- WASO_time_n: time of the nth wake after sleep onset
+- TST: total sleep time
+- TIB: total time in bed
+- SE: Sleep Efficiency = TST/TIB
+- LIB: lingering in bed
+Visualization widgets (charts, graphs) (do this)
 Insights and feedback UI
 
 9. Gamification Module

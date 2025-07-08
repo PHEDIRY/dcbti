@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../../../core/models/sleep_diary_entry.dart';
 import '../../../core/services/sleep_diary_service.dart';
+import '../../../core/services/sleep_analysis_service.dart';
+import '../widgets/sleep_chart_widget.dart';
 import 'sleep_diary_entry_screen.dart';
 
 class SleepDiaryListScreen extends StatefulWidget {
@@ -14,7 +16,9 @@ class SleepDiaryListScreen extends StatefulWidget {
 
 class _SleepDiaryListScreenState extends State<SleepDiaryListScreen> {
   final SleepDiaryService _diaryService = SleepDiaryService();
+  final SleepAnalysisService _analysisService = SleepAnalysisService();
   List<SleepDiaryEntry> _entries = [];
+  Map<String, dynamic> _weeklyAverages = {};
   bool _isLoading = true;
   String? _errorMessage;
   final ScrollController _scrollController = ScrollController();
@@ -42,8 +46,13 @@ class _SleepDiaryListScreenState extends State<SleepDiaryListScreen> {
 
     try {
       final entries = await _diaryService.getEntries();
+      final weeklyEntries = _analysisService.getLastWeekEntries(entries);
+      final weeklyAverages =
+          _analysisService.calculateWeeklyAverages(weeklyEntries);
+
       setState(() {
         _entries = entries;
+        _weeklyAverages = weeklyAverages;
         _isLoading = false;
         _isRefreshing = false;
       });
@@ -68,6 +77,13 @@ class _SleepDiaryListScreenState extends State<SleepDiaryListScreen> {
       await _diaryService.deleteEntry(id);
       setState(() {
         _entries.removeWhere((entry) => entry.id == id);
+      });
+      // Recalculate weekly averages after deleting an entry
+      final weeklyEntries = _analysisService.getLastWeekEntries(_entries);
+      final weeklyAverages =
+          _analysisService.calculateWeeklyAverages(weeklyEntries);
+      setState(() {
+        _weeklyAverages = weeklyAverages;
       });
     } catch (e) {
       if (mounted) {
@@ -107,6 +123,163 @@ class _SleepDiaryListScreenState extends State<SleepDiaryListScreen> {
     } else {
       return '$minutes分鐘';
     }
+  }
+
+  Widget _buildAnalyticsCard() {
+    if (_entries.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    final avgTST = _weeklyAverages['avgTST'] as Duration;
+    final avgSE = _weeklyAverages['avgSE'] as double;
+    final avgSOL = _weeklyAverages['avgSOL'] as int;
+    final avgWASO = _weeklyAverages['avgWASO'] as int;
+
+    return Container(
+      margin: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+      decoration: BoxDecoration(
+        color: CupertinoColors.systemBackground,
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: [
+          BoxShadow(
+            color: CupertinoColors.systemGrey5.withOpacity(0.5),
+            blurRadius: 10,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text(
+                  '過去七天睡眠數據',
+                  style: TextStyle(
+                    fontFamily: 'SF Pro Text',
+                    fontSize: 17,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: CupertinoColors.systemBlue.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Text(
+                    '${_analysisService.getLastWeekEntries(_entries).length}筆記錄',
+                    style: const TextStyle(
+                      fontFamily: 'SF Pro Text',
+                      fontSize: 14,
+                      fontWeight: FontWeight.w500,
+                      color: CupertinoColors.systemBlue,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            Row(
+              children: [
+                Expanded(
+                  child: _buildMetricItem(
+                    icon: CupertinoIcons.moon_fill,
+                    label: '平均睡眠時間',
+                    value: _formatDuration(avgTST),
+                    color: CupertinoColors.systemIndigo,
+                  ),
+                ),
+                Expanded(
+                  child: _buildMetricItem(
+                    icon: CupertinoIcons.chart_bar_fill,
+                    label: '睡眠效率',
+                    value: '${avgSE.toStringAsFixed(1)}%',
+                    color: CupertinoColors.systemGreen,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Expanded(
+                  child: _buildMetricItem(
+                    icon: CupertinoIcons.clock,
+                    label: '平均入睡時間',
+                    value: '$avgSOL分鐘',
+                    color: CupertinoColors.systemOrange,
+                  ),
+                ),
+                Expanded(
+                  child: _buildMetricItem(
+                    icon: CupertinoIcons.exclamationmark_circle,
+                    label: '平均夜醒時間',
+                    value: '$avgWASO分鐘',
+                    color: CupertinoColors.systemRed,
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMetricItem({
+    required IconData icon,
+    required String label,
+    required String value,
+    required Color color,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 8),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: color.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Icon(
+              icon,
+              size: 20,
+              color: color,
+            ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label,
+                  style: const TextStyle(
+                    fontFamily: 'SF Pro Text',
+                    fontSize: 13,
+                    color: CupertinoColors.systemGrey,
+                  ),
+                ),
+                Text(
+                  value,
+                  style: const TextStyle(
+                    fontFamily: 'SF Pro Text',
+                    fontSize: 16,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   Widget _buildEntryCard(SleepDiaryEntry entry) {
@@ -280,7 +453,8 @@ class _SleepDiaryListScreenState extends State<SleepDiaryListScreen> {
                           ),
                           const SizedBox(height: 4),
                           Text(
-                            _formatDuration(entry.sleepDuration),
+                            _formatDuration(
+                                _analysisService.calculateTST(entry)),
                             style: const TextStyle(
                               fontFamily: 'SF Pro Text',
                               fontSize: 17,
@@ -305,6 +479,59 @@ class _SleepDiaryListScreenState extends State<SleepDiaryListScreen> {
                           const SizedBox(height: 4),
                           Text(
                             '${entry.timeToFallAsleepMinutes}分鐘',
+                            style: const TextStyle(
+                              fontFamily: 'SF Pro Text',
+                              fontSize: 17,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            '睡眠效率',
+                            style: TextStyle(
+                              fontFamily: 'SF Pro Text',
+                              fontSize: 13,
+                              color: CupertinoColors.systemGrey,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            '${_analysisService.calculateSE(entry).toStringAsFixed(1)}%',
+                            style: const TextStyle(
+                              fontFamily: 'SF Pro Text',
+                              fontSize: 17,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            '夜醒次數',
+                            style: TextStyle(
+                              fontFamily: 'SF Pro Text',
+                              fontSize: 13,
+                              color: CupertinoColors.systemGrey,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            '${entry.numberOfAwakenings}次',
                             style: const TextStyle(
                               fontFamily: 'SF Pro Text',
                               fontSize: 17,
@@ -444,6 +671,12 @@ class _SleepDiaryListScreenState extends State<SleepDiaryListScreen> {
                 slivers: [
                   CupertinoSliverRefreshControl(
                     onRefresh: _handleRefresh,
+                  ),
+                  SliverToBoxAdapter(
+                    child: _buildAnalyticsCard(),
+                  ),
+                  SliverToBoxAdapter(
+                    child: SleepChartWidget(entries: _entries),
                   ),
                   SliverPadding(
                     padding: const EdgeInsets.only(bottom: 100),
