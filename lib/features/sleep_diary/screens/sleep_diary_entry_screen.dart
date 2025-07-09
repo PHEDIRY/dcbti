@@ -28,7 +28,9 @@ class _SleepDiaryEntryScreenState extends State<SleepDiaryEntryScreen> {
   @override
   void initState() {
     super.initState();
-    // Initialize Q3 selection as null (no selection)
+    // Initialize selections as null
+    _quickSleep = null;
+    _wokeUpDuringSleep = null;
     _hasLeftBed = null;
     _leftBedDuration = Duration.zero;
 
@@ -65,6 +67,10 @@ class _SleepDiaryEntryScreenState extends State<SleepDiaryEntryScreen> {
   // Other state variables
   int _timeToFallAsleepHours = 0;
   int _timeToFallAsleepMinutes = 0;
+  bool?
+      _quickSleep; // Add this variable to track if user fell asleep within 5 minutes
+  bool?
+      _wokeUpDuringSleep; // Add this variable to track if user woke up during sleep
   String? _sleepDifficultyReason;
   int _numberOfAwakenings = 0;
   final List<WakeUpEvent> _wakeUpEvents = [];
@@ -90,14 +96,17 @@ class _SleepDiaryEntryScreenState extends State<SleepDiaryEntryScreen> {
 
   List<Widget> get _pages => [
         _buildBedTimePage(),
+        _buildQuickSleepPage(),
         _buildTimeToFallAsleepPage(),
-        _buildLeftBedPage(),
         _buildSleepDifficultyReasonPage(),
+        _buildLeftBedPage(),
+        _buildLeftBedDurationPage(),
+        _buildWokeUpDuringSleepPage(),
         _buildNumberOfAwakeningsPage(),
         _buildWakeUpDifficultyReasonPage(),
         _buildFinalAwakeningPage(),
         _buildImmediateWakeUpPage(),
-        // _buildTimeInBedAfterWakingPage(), // Removed Q9
+        _buildTimeInBedAfterWakingPage(),
         _buildSleepQualityPage(),
         _buildConsumptionEventsPage(),
         _buildTagsPage(),
@@ -110,21 +119,26 @@ class _SleepDiaryEntryScreenState extends State<SleepDiaryEntryScreen> {
       // Q1: Bed time - always valid as it has default value
       case 0:
         return true;
-      // Q2: Time to fall asleep - always valid as it has default value
+      // Q2: Quick sleep question - require selection
       case 1:
-        return true;
-      // Q3: Left bed during falling asleep
+        return _quickSleep != null;
+      // Q3: Time to fall asleep - always valid as it has default value
       case 2:
-        // Only validate if not skipped (Q2 >= 3 minutes)
-        if (_timeToFallAsleepHours > 0 || _timeToFallAsleepMinutes >= 3) {
-          return _hasLeftBed != null;
-        }
         return true;
-      // Q4: Sleep difficulty reason
+      // Q4: Sleep difficulty reason (only shown if Q3 > 5 minutes)
       case 3:
         return _sleepDifficultyReason != null;
-      // Q5: Number of awakenings - validate that all wake-up events have times selected
+      // Q5: Left bed during falling asleep (only shown if Q3 > 5 minutes)
       case 4:
+        return _hasLeftBed != null;
+      // Q6: Left bed duration (only shown if Q5 answer is "Yes")
+      case 5:
+        return true; // Always valid as it has default values
+      // Q7: Woke up during sleep question
+      case 6:
+        return _wokeUpDuringSleep != null;
+      // Q8: Number of awakenings - validate that all wake-up events have times selected
+      case 7:
         if (_numberOfAwakenings > 0) {
           // Check if all wake-up events have times selected
           for (int i = 0; i < _wakeUpEvents.length; i++) {
@@ -147,24 +161,30 @@ class _SleepDiaryEntryScreenState extends State<SleepDiaryEntryScreen> {
           }
         }
         return true;
-      // Q6: Wake up difficulty reason
-      case 5:
-        // Make Q6 mandatory, same as Q4
-        return _wakeUpDifficultyReason != null;
-      // Q7: Final awakening time - always valid as it has default value
-      case 6:
-        return true;
-      // Q8: Immediate wake up
-      case 7:
-        return _immediateWakeUp != null;
-      // Q9: Sleep quality
+      // Q9: Wake up difficulty reason (only shown if Q7 answer is "Yes")
       case 8:
-        return _sleepQuality != null;
-      // Q10: Consumption events - always valid as it's optional
+        // Make Q9 mandatory only if user woke up during sleep
+        return _wokeUpDuringSleep == false || _wakeUpDifficultyReason != null;
+      // Q10: Final awakening time - always valid as it has default value
       case 9:
         return true;
-      // Q11: Tags - always valid as it's optional
+      // Q11: Immediate wake up
       case 10:
+        return _immediateWakeUp != null;
+      // Q11: Time in bed after waking
+      case 11:
+        return true; // Always valid as it has default values
+      // Q12: Sleep quality
+      case 12:
+        return _sleepQuality != null;
+      // Q13: Consumption events - always valid as it's optional
+      case 13:
+        return true;
+      // Q14: Tags - always valid as it's optional
+      case 14:
+        return true;
+      // Q15: Notes - always valid as it's optional
+      case 15:
         return true;
       default:
         return true;
@@ -337,6 +357,11 @@ class _SleepDiaryEntryScreenState extends State<SleepDiaryEntryScreen> {
   }
 
   void _handleSubmit() async {
+    // Set q3Skipped flag if time to fall asleep is 5 minutes or less
+    if (_timeToFallAsleepHours == 0 && _timeToFallAsleepMinutes <= 5) {
+      _q3Skipped = true;
+    }
+
     // Validation before creating entry
     final validationError = _validateEntry();
     if (validationError != null) {
@@ -357,8 +382,9 @@ class _SleepDiaryEntryScreenState extends State<SleepDiaryEntryScreen> {
     }
 
     // Ensure all wake-up events have times before creating the entry
-    final validatedWakeUpEvents =
-        _wakeUpEvents.where((event) => event.time != null).toList();
+    final validatedWakeUpEvents = _wokeUpDuringSleep == true
+        ? _wakeUpEvents.where((event) => event.time != null).toList()
+        : <WakeUpEvent>[];
 
     final entry = SleepDiaryEntry.create(
       entryDate: DateTime.now(), // Set to current day
@@ -570,9 +596,44 @@ class _SleepDiaryEntryScreenState extends State<SleepDiaryEntryScreen> {
               ? () {
                   setState(() {
                     _currentStep--;
-                    // If going back from Q4 to Q2 (skipping Q3)
-                    if (_q3Skipped && _currentStep == 2) {
-                      _currentStep--;
+                    // Handle skipped questions when navigating back
+
+                    // If going back from Q3 to Q2 when Q2 is "是"
+                    if (_quickSleep == true && _currentStep == 2) {
+                      _currentStep = 1; // Go back to Q2 (quick sleep question)
+                    }
+                    // If going back from Q4-Q6 to Q2 when Q2 is "是" (skip Q3)
+                    else if (_quickSleep == true &&
+                        (_currentStep >= 3 && _currentStep <= 5)) {
+                      _currentStep = 1; // Go back to Q2 (quick sleep question)
+                    }
+                    // If going back from Q7 to Q5 when Q5 answer is "否" (skip Q6)
+                    else if (_hasLeftBed == false && _currentStep == 6) {
+                      _currentStep = 4; // Go back to Q5 (left bed question)
+                    }
+                    // Also handle going back from Q6 to Q5 when Q5 answer is "否"
+                    else if (_hasLeftBed == false && _currentStep == 5) {
+                      _currentStep = 4; // Go back to Q5 (left bed question)
+                    }
+                    // If going back from Q10 to Q7 when Q7 is "沒有" (skip Q8 and Q9)
+                    else if (_wokeUpDuringSleep == false && _currentStep == 9) {
+                      _currentStep = 6; // Go back to Q7 (woke up during sleep)
+                    }
+                    // If going back from Q9 to Q7 when Q7 is "沒有"
+                    else if (_wokeUpDuringSleep == false && _currentStep == 8) {
+                      _currentStep = 6; // Go back to Q7 (woke up during sleep)
+                    }
+                    // If going back from Q8 to Q7 when Q7 is "沒有"
+                    else if (_wokeUpDuringSleep == false && _currentStep == 7) {
+                      _currentStep = 6; // Go back to Q7 (woke up during sleep)
+                    }
+                    // If going back from Q13 (sleep quality) to Q12 when Q11 answer is "有"
+                    else if (_currentStep == 12 && _immediateWakeUp == true) {
+                      _currentStep = 10; // Go back to Q11 (immediate wake up)
+                    }
+                    // If going back from Q12 (time in bed) to Q11 when Q11 answer is "有"
+                    else if (_currentStep == 11 && _immediateWakeUp == true) {
+                      _currentStep = 10; // Go back to Q11 (immediate wake up)
                     }
                   });
                 }
@@ -738,7 +799,7 @@ class _SleepDiaryEntryScreenState extends State<SleepDiaryEntryScreen> {
                   onPressed: isValid
                       ? () {
                           // Check for specific validation errors
-                          if (_currentStep == 4 && _numberOfAwakenings > 0) {
+                          if (_currentStep == 5 && _numberOfAwakenings > 0) {
                             // Validate wake-up times before proceeding
                             String? validationError = _validateWakeUpTimes();
                             if (validationError != null) {
@@ -761,18 +822,33 @@ class _SleepDiaryEntryScreenState extends State<SleepDiaryEntryScreen> {
                           }
 
                           setState(() {
-                            // Skip Q3 if Q2 is less than 3 minutes
-                            if (_currentStep == 1 &&
-                                _timeToFallAsleepHours == 0 &&
-                                _timeToFallAsleepMinutes < 3) {
-                              _currentStep += 2;
-                              _q3Skipped = true; // Set flag when skipping Q3
+                            // If user selected "Yes" for quick sleep in Q2, skip to Q7 (number of awakenings)
+                            if (_currentStep == 1 && _quickSleep == true) {
+                              _currentStep =
+                                  6; // Skip to Q7 (number of awakenings)
                             }
-                            // Skip Q9 if user selected "Yes" for immediate wake up in Q8
-                            else if (_currentStep == 7 &&
-                                _immediateWakeUp == true) {
+                            // Skip Q4 and Q5 if Q3 is less than or equal to 5 minutes
+                            else if (_currentStep == 2 &&
+                                _timeToFallAsleepHours == 0 &&
+                                _timeToFallAsleepMinutes <= 5) {
+                              _currentStep += 2;
+                              _q3Skipped = true; // Set flag when skipping Q4
+                            }
+                            // Skip Q6 (the duration question) if user selected "No" for leaving bed in Q5
+                            else if (_currentStep == 4 &&
+                                _hasLeftBed == false) {
+                              _currentStep += 2;
+                            }
+                            // Skip Q8 (number of awakenings) and Q9 (wake up difficulty) if user selected "No" for woke up during sleep in Q7
+                            else if (_currentStep == 6 &&
+                                _wokeUpDuringSleep == false) {
                               _currentStep +=
-                                  1; // Updated to +1 since we removed Q9
+                                  3; // Skip to Q10 (final awakening time)
+                            }
+                            // Skip time in bed after waking page if user selected "有" for immediate wake up
+                            else if (_currentStep == 10 &&
+                                _immediateWakeUp == true) {
+                              _currentStep += 2;
                             } else {
                               _currentStep++;
                             }
@@ -782,9 +858,9 @@ class _SleepDiaryEntryScreenState extends State<SleepDiaryEntryScreen> {
                           });
                         }
                       : () {
-                          // If button is disabled and we're on Q5 (wake-up events),
+                          // If button is disabled and we're on Q6 (wake-up events),
                           // show validation warnings
-                          if (_currentStep == 4 && _numberOfAwakenings > 0) {
+                          if (_currentStep == 5 && _numberOfAwakenings > 0) {
                             setState(() {
                               _showValidationWarnings = true;
                             });
@@ -1090,8 +1166,8 @@ class _SleepDiaryEntryScreenState extends State<SleepDiaryEntryScreen> {
     ); // 12:00 PM previous day
     final maxTime = now; // Current time
     return _buildTimePicker(
-      title: '你什麼時候上床睡覺？',
-      subtitle: '躺到床上準備睡覺的時間',
+      title: '昨天幾點上床睡覺？',
+      subtitle: '可以填昨晚或今天凌晨的時間',
       time: _bedTime,
       onChanged: (time) {
         setState(() {
@@ -1105,33 +1181,12 @@ class _SleepDiaryEntryScreenState extends State<SleepDiaryEntryScreen> {
     );
   }
 
-  Widget _buildTimeToFallAsleepPage() {
-    return _buildDurationPicker(
-      title: '躺上床後，花了多長時間才入睡？',
-      subtitle: '',
-      hours: _timeToFallAsleepHours,
-      minutes: _timeToFallAsleepMinutes,
-      onChanged: (hours, minutes) {
-        setState(() {
-          _timeToFallAsleepHours = hours;
-          _timeToFallAsleepMinutes = minutes;
-        });
-      },
-    );
-  }
-
-  Widget _buildLeftBedPage() {
-    // Calculate maximum duration based on Q2
-    final int maxMinutes =
-        _timeToFallAsleepHours * 60 + _timeToFallAsleepMinutes;
-    final int maxHours = maxMinutes ~/ 60;
-    final int remainingMinutes = maxMinutes % 60;
-
+  Widget _buildQuickSleepPage() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const Text(
-          '等待入睡期間，有離開床舖嗎？',
+          '躺上床之後，有在5分鐘之內睡著嗎？',
           style: TextStyle(
             fontFamily: 'SF Pro Display',
             fontSize: 24,
@@ -1142,16 +1197,21 @@ class _SleepDiaryEntryScreenState extends State<SleepDiaryEntryScreen> {
         const SizedBox(height: 24),
         Column(
           children: ['是', '否'].map((option) {
-            final isSelected = _hasLeftBed == (option == '是');
+            final isSelected = _quickSleep == (option == '是');
             return GestureDetector(
               onTap: () => setState(() {
-                _hasLeftBed = option == '是';
-                if (option == '否') {
-                  _leftBedDuration = Duration.zero;
-                } else if (_leftBedDuration.inMinutes == 0) {
-                  // Initialize with a default value if selecting "Yes"
-                  _leftBedDuration =
-                      Duration(minutes: maxMinutes > 5 ? 5 : maxMinutes);
+                _quickSleep = option == '是';
+                if (option == '是') {
+                  // Skip Q3-Q5 by setting the flag
+                  _q3Skipped = true;
+                  // Reset Q3 values to null equivalent since we're skipping it
+                  _timeToFallAsleepHours = 0;
+                  _timeToFallAsleepMinutes = 0;
+                } else {
+                  // Reset Q3 values to default when answer is "否"
+                  _timeToFallAsleepHours = 0;
+                  _timeToFallAsleepMinutes = 5;
+                  _q3Skipped = false;
                 }
               }),
               child: Container(
@@ -1185,32 +1245,122 @@ class _SleepDiaryEntryScreenState extends State<SleepDiaryEntryScreen> {
             );
           }).toList(),
         ),
-        if (_hasLeftBed == true) ...[
-          _buildDurationPicker(
-            title: '',
-            subtitle: '選擇離開床舖的持續時間',
-            hours: _leftBedDuration.inHours,
-            minutes: _leftBedDuration.inMinutes.remainder(60),
-            maxHours: maxHours,
-            maxMinutes: remainingMinutes,
-            onChanged: (int hours, int minutes) {
-              setState(() {
-                _leftBedDuration = Duration(hours: hours, minutes: minutes);
-              });
-            },
-          ),
-        ],
       ],
     );
   }
 
-  Widget _buildSleepDifficultyReasonPage() {
+  Widget _buildTimeToFallAsleepPage() {
+    // Only enforce minimum time if Q2 answer is "否"
+    if (_quickSleep == false &&
+        _timeToFallAsleepHours == 0 &&
+        _timeToFallAsleepMinutes < 5) {
+      _timeToFallAsleepMinutes = 5;
+    }
+
+    return _buildDurationPicker(
+      title: '躺上床後，花了多長時間才入睡？',
+      subtitle: '包含中間離開床的時間',
+      hours: _timeToFallAsleepHours,
+      minutes: _timeToFallAsleepMinutes,
+      onChanged: (hours, minutes) {
+        // Only enforce minimum time if Q2 answer is "否"
+        int adjustedMinutes = minutes;
+        if (_quickSleep == false && hours == 0 && minutes < 5) {
+          adjustedMinutes = 5;
+        }
+
+        setState(() {
+          _timeToFallAsleepHours = hours;
+          _timeToFallAsleepMinutes = adjustedMinutes;
+        });
+      },
+    );
+  }
+
+  Widget _buildLeftBedPage() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const Text(
-          '下列哪一項最讓你睡不著？',
+          '等待入睡期間，有離開床舖嗎？',
           style: TextStyle(
+            fontFamily: 'SF Pro Display',
+            fontSize: 24,
+            fontWeight: FontWeight.bold,
+            color: CupertinoColors.label,
+          ),
+        ),
+        const SizedBox(height: 24),
+        Column(
+          children: ['是', '否'].map((option) {
+            final isSelected = _hasLeftBed == (option == '是');
+            return GestureDetector(
+              onTap: () => setState(() {
+                _hasLeftBed = option == '是';
+                if (option == '否') {
+                  _leftBedDuration = Duration.zero;
+                }
+              }),
+              child: Container(
+                width: double.infinity,
+                margin: const EdgeInsets.only(bottom: 12),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 14,
+                ),
+                decoration: BoxDecoration(
+                  color: CupertinoColors.systemBackground,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: isSelected
+                        ? CupertinoColors.activeBlue
+                        : CupertinoColors.systemGrey5,
+                    width: 1,
+                  ),
+                ),
+                child: Text(
+                  option,
+                  style: TextStyle(
+                    fontFamily: 'SF Pro Text',
+                    fontSize: 17,
+                    color: isSelected
+                        ? CupertinoColors.activeBlue
+                        : CupertinoColors.label,
+                  ),
+                ),
+              ),
+            );
+          }).toList(),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildLeftBedDurationPage() {
+    // Calculate maximum duration based on Q2
+    final int maxMinutes =
+        _timeToFallAsleepHours * 60 + _timeToFallAsleepMinutes;
+    final int maxHours = maxMinutes ~/ 60;
+    final int remainingMinutes = maxMinutes % 60;
+
+    // Format the duration for the title
+    String durationText = '';
+    if (_timeToFallAsleepHours > 0) {
+      durationText += '${_timeToFallAsleepHours}小時';
+    }
+    if (_timeToFallAsleepMinutes > 0) {
+      if (durationText.isNotEmpty) {
+        durationText += ' ';
+      }
+      durationText += '${_timeToFallAsleepMinutes}分鐘';
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          '在等待入睡的這$durationText之內，有多長時間不在床上？',
+          style: const TextStyle(
             fontFamily: 'SF Pro Display',
             fontSize: 24,
             fontWeight: FontWeight.bold,
@@ -1219,7 +1369,7 @@ class _SleepDiaryEntryScreenState extends State<SleepDiaryEntryScreen> {
         ),
         const SizedBox(height: 8),
         const Text(
-          '選擇最符合你情況的原因',
+          '如果不確定，填一個大致猜測即可',
           style: TextStyle(
             fontFamily: 'SF Pro Text',
             fontSize: 17,
@@ -1227,116 +1377,85 @@ class _SleepDiaryEntryScreenState extends State<SleepDiaryEntryScreen> {
           ),
         ),
         const SizedBox(height: 24),
-        _buildSleepDifficultyReasonSection(),
+        _buildDurationPicker(
+          title: '',
+          subtitle: '',
+          hours: _leftBedDuration.inHours,
+          minutes: _leftBedDuration.inMinutes.remainder(60),
+          maxHours: maxHours,
+          maxMinutes: remainingMinutes,
+          onChanged: (int hours, int minutes) {
+            setState(() {
+              _leftBedDuration = Duration(hours: hours, minutes: minutes);
+            });
+          },
+        ),
       ],
     );
   }
 
-  Widget _buildSleepDifficultyReasonSection() {
-    final reasons = [
-      '思緒奔騰',
-      '身體躁動不安',
-      '憂慮或焦慮',
-      '其他',
-      '以上皆無',
-    ];
-
+  Widget _buildWokeUpDuringSleepPage() {
     return Column(
-      children: reasons.map((reason) {
-        final isSelected = _sleepDifficultyReason == reason;
-        return GestureDetector(
-          onTap: () => setState(
-              () => _sleepDifficultyReason = isSelected ? null : reason),
-          child: Container(
-            width: double.infinity,
-            margin: const EdgeInsets.only(bottom: 12),
-            padding: const EdgeInsets.symmetric(
-              horizontal: 16,
-              vertical: 14,
-            ),
-            decoration: BoxDecoration(
-              color: CupertinoColors.systemBackground,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(
-                color: isSelected
-                    ? CupertinoColors.activeBlue
-                    : CupertinoColors.systemGrey5,
-                width: 1,
-              ),
-            ),
-            child: Text(
-              reason,
-              style: TextStyle(
-                fontFamily: 'SF Pro Text',
-                fontSize: 17,
-                color: isSelected
-                    ? CupertinoColors.activeBlue
-                    : CupertinoColors.label,
-              ),
-            ),
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          '睡眠中途有醒來過嗎？',
+          style: TextStyle(
+            fontFamily: 'SF Pro Display',
+            fontSize: 24,
+            fontWeight: FontWeight.bold,
+            color: CupertinoColors.label,
           ),
-        );
-      }).toList(),
+        ),
+        const SizedBox(height: 24),
+        Column(
+          children: ['有', '沒有'].map((option) {
+            final isSelected = _wokeUpDuringSleep == (option == '有');
+            return GestureDetector(
+              onTap: () => setState(() {
+                _wokeUpDuringSleep = option == '有';
+                if (option == '有' && _numberOfAwakenings == 0) {
+                  // If user woke up during sleep and no awakenings are set yet, set to 1
+                  _numberOfAwakenings = 1;
+                  // Add a default wake-up event if none exists
+                  if (_wakeUpEvents.isEmpty) {
+                    _addWakeUpEvent();
+                  }
+                }
+              }),
+              child: Container(
+                width: double.infinity,
+                margin: const EdgeInsets.only(bottom: 12),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 14,
+                ),
+                decoration: BoxDecoration(
+                  color: CupertinoColors.systemBackground,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: isSelected
+                        ? CupertinoColors.activeBlue
+                        : CupertinoColors.systemGrey5,
+                    width: 1,
+                  ),
+                ),
+                child: Text(
+                  option,
+                  style: TextStyle(
+                    fontFamily: 'SF Pro Text',
+                    fontSize: 17,
+                    color: isSelected
+                        ? CupertinoColors.activeBlue
+                        : CupertinoColors.label,
+                  ),
+                ),
+              ),
+            );
+          }).toList(),
+        ),
+      ],
     );
-  }
-
-  // Add a method to check if a specific wake-up event's time is valid
-  String? _validateWakeUpEventTime(int index) {
-    final event = _wakeUpEvents[index];
-
-    // If no time selected, show a hint
-    if (event.time == null) {
-      return '請選擇醒來時間';
-    }
-
-    // Calculate minimum allowed time
-    DateTime minTime;
-
-    // If this is not the first event, min time is after the previous event
-    if (index > 0) {
-      final prevEvent = _wakeUpEvents[index - 1];
-      if (prevEvent.time != null) {
-        minTime = prevEvent.time!
-            .add(Duration(minutes: prevEvent.stayedInBedMinutes));
-
-        // Check if time is after previous event's end time
-        if (event.time!.isBefore(minTime)) {
-          return '時間必須晚於上一次醒來結束時間 (${DateFormat('HH:mm').format(minTime)})';
-        }
-      }
-    } else {
-      // If this is the first wake-up event, min time is bedTime + sleep latency
-      minTime = _bedTime.add(Duration(
-        hours: _timeToFallAsleepHours,
-        minutes: _timeToFallAsleepMinutes,
-      ));
-
-      // Check if time is after sleep latency
-      if (event.time!.isBefore(minTime)) {
-        return '時間必須晚於入睡時間 (${DateFormat('HH:mm').format(minTime)})';
-      }
-    }
-
-    // Check if time is before next event's time (if any)
-    if (index < _wakeUpEvents.length - 1) {
-      final nextEvent = _wakeUpEvents[index + 1];
-      if (nextEvent.time != null) {
-        final thisEventEndTime =
-            event.time!.add(Duration(minutes: event.stayedInBedMinutes));
-        if (thisEventEndTime.isAfter(nextEvent.time!)) {
-          return '清醒時間太長，會與下一次醒來時間重疊';
-        }
-      }
-    }
-
-    // Check if time is before final awakening time
-    final eventEndTime =
-        event.time!.add(Duration(minutes: event.stayedInBedMinutes));
-    if (eventEndTime.isAfter(_finalAwakeningTime)) {
-      return '清醒時間太長，會超過最後起床時間';
-    }
-
-    return null;
   }
 
   Widget _buildNumberOfAwakeningsPage() {
@@ -1379,6 +1498,7 @@ class _SleepDiaryEntryScreenState extends State<SleepDiaryEntryScreen> {
             });
           },
           suffix: '次',
+          minValue: 1, // Set minimum to 1
         ),
         if (_numberOfAwakenings > 0) ...[
           const SizedBox(height: 32),
@@ -1513,6 +1633,65 @@ class _SleepDiaryEntryScreenState extends State<SleepDiaryEntryScreen> {
         ],
       ],
     );
+  }
+
+  // Add a method to check if a specific wake-up event's time is valid
+  String? _validateWakeUpEventTime(int index) {
+    final event = _wakeUpEvents[index];
+
+    // If no time selected, show a hint
+    if (event.time == null) {
+      return '請選擇醒來時間';
+    }
+
+    // Calculate minimum allowed time
+    DateTime minTime;
+
+    // If this is not the first event, min time is after the previous event
+    if (index > 0) {
+      final prevEvent = _wakeUpEvents[index - 1];
+      if (prevEvent.time != null) {
+        minTime = prevEvent.time!
+            .add(Duration(minutes: prevEvent.stayedInBedMinutes));
+
+        // Check if time is after previous event's end time
+        if (event.time!.isBefore(minTime)) {
+          return '時間必須晚於上一次醒來結束時間 (${DateFormat('HH:mm').format(minTime)})';
+        }
+      }
+    } else {
+      // If this is the first wake-up event, min time is bedTime + sleep latency
+      minTime = _bedTime.add(Duration(
+        hours: _timeToFallAsleepHours,
+        minutes: _timeToFallAsleepMinutes,
+      ));
+
+      // Check if time is after sleep latency
+      if (event.time!.isBefore(minTime)) {
+        return '時間必須晚於入睡時間 (${DateFormat('HH:mm').format(minTime)})';
+      }
+    }
+
+    // Check if time is before next event's time (if any)
+    if (index < _wakeUpEvents.length - 1) {
+      final nextEvent = _wakeUpEvents[index + 1];
+      if (nextEvent.time != null) {
+        final thisEventEndTime =
+            event.time!.add(Duration(minutes: event.stayedInBedMinutes));
+        if (thisEventEndTime.isAfter(nextEvent.time!)) {
+          return '清醒時間太長，會與下一次醒來時間重疊';
+        }
+      }
+    }
+
+    // Check if time is before final awakening time
+    final eventEndTime =
+        event.time!.add(Duration(minutes: event.stayedInBedMinutes));
+    if (eventEndTime.isAfter(_finalAwakeningTime)) {
+      return '清醒時間太長，會超過最後起床時間';
+    }
+
+    return null;
   }
 
   // New method to build wake-up time field with proper constraints
@@ -1779,8 +1958,8 @@ class _SleepDiaryEntryScreenState extends State<SleepDiaryEntryScreen> {
 
     final maxTime = now;
     return _buildTimePicker(
-      title: '什麼時候醒來 (起床時間)？',
-      subtitle: '起床之後就不再回去睡了，開始一天的活動',
+      title: '幾點起床？',
+      subtitle: '(不算中途醒來) 最後一次醒來、準備起床的時間?',
       time: _finalAwakeningTime,
       onChanged: (time) {
         // Validate final awakening time against last wake-up event
@@ -1831,7 +2010,7 @@ class _SleepDiaryEntryScreenState extends State<SleepDiaryEntryScreen> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const Text(
-          '你有在醒來的五分鐘之內，起身離開床舖嗎？',
+          '有在醒來的五分鐘之內，起身離開床舖嗎？',
           style: TextStyle(
             fontFamily: 'SF Pro Display',
             fontSize: 24,
@@ -1841,15 +2020,15 @@ class _SleepDiaryEntryScreenState extends State<SleepDiaryEntryScreen> {
         ),
         const SizedBox(height: 24),
         Column(
-          children: ['是', '否'].map((option) {
-            final isSelected = _immediateWakeUp == (option == '是');
+          children: ['有', '沒有'].map((option) {
+            final isSelected = _immediateWakeUp == (option == '有');
             return GestureDetector(
               onTap: () => setState(() {
-                _immediateWakeUp = option == '是';
-                if (option == '是') {
+                _immediateWakeUp = option == '有';
+                if (option == '有') {
                   _timeInBedAfterWakingHours = 0;
                   _timeInBedAfterWakingMinutes = 0;
-                } else if (option == '否') {
+                } else if (option == '沒有') {
                   // Set default values for time in bed after waking
                   _timeInBedAfterWakingHours = 0;
                   _timeInBedAfterWakingMinutes = 15; // Default to 15 minutes
@@ -1886,41 +2065,16 @@ class _SleepDiaryEntryScreenState extends State<SleepDiaryEntryScreen> {
             );
           }).toList(),
         ),
-        if (_immediateWakeUp == false) ...[
-          const SizedBox(height: 16),
-          const Text(
-            '如果沒有立即起床，請選擇賴床時間',
-            style: TextStyle(
-              fontFamily: 'SF Pro Text',
-              fontSize: 17,
-              color: CupertinoColors.systemGrey,
-            ),
-          ),
-          const SizedBox(height: 16),
-          _buildDurationPicker(
-            title: '',
-            subtitle: '賴床了多長時間？',
-            hours: _timeInBedAfterWakingHours,
-            minutes: _timeInBedAfterWakingMinutes,
-            onChanged: (hours, minutes) {
-              setState(() {
-                _timeInBedAfterWakingHours = hours;
-                _timeInBedAfterWakingMinutes = minutes;
-              });
-            },
-          ),
-        ],
       ],
     );
   }
 
   Widget _buildTimeInBedAfterWakingPage() {
-    // This page is only shown if the user selected "No" for immediate wake up
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const Text(
-          '醒來後，賴床了多長時間？',
+          '賴床了多長時間？',
           style: TextStyle(
             fontFamily: 'SF Pro Display',
             fontSize: 24,
@@ -1929,15 +2083,6 @@ class _SleepDiaryEntryScreenState extends State<SleepDiaryEntryScreen> {
           ),
         ),
         const SizedBox(height: 8),
-        const Text(
-          '從醒來到實際起身離開床舖的時間',
-          style: TextStyle(
-            fontFamily: 'SF Pro Text',
-            fontSize: 17,
-            color: CupertinoColors.systemGrey,
-          ),
-        ),
-        const SizedBox(height: 24),
         _buildDurationPicker(
           title: '',
           subtitle: '',
@@ -1984,15 +2129,17 @@ class _SleepDiaryEntryScreenState extends State<SleepDiaryEntryScreen> {
             color: CupertinoColors.systemGrey,
           ),
         ),
-        const SizedBox(height: 32),
+        const SizedBox(height: 16),
+        // Use a more compact layout with smaller padding and margins
         ...qualities.map((quality) {
           final isSelected = _sleepQuality == quality['value'];
           return GestureDetector(
             onTap: () =>
                 setState(() => _sleepQuality = quality['value'] as double),
             child: Container(
-              margin: const EdgeInsets.only(bottom: 12),
-              padding: const EdgeInsets.all(16),
+              margin: const EdgeInsets.only(bottom: 8), // Reduced bottom margin
+              padding: const EdgeInsets.symmetric(
+                  horizontal: 12, vertical: 10), // Reduced padding
               decoration: BoxDecoration(
                 color: isSelected
                     ? CupertinoColors.activeBlue
@@ -2009,9 +2156,10 @@ class _SleepDiaryEntryScreenState extends State<SleepDiaryEntryScreen> {
                 children: [
                   Text(
                     quality['emoji'] as String,
-                    style: const TextStyle(fontSize: 32),
+                    style:
+                        const TextStyle(fontSize: 28), // Slightly smaller emoji
                   ),
-                  const SizedBox(width: 12),
+                  const SizedBox(width: 10), // Reduced spacing
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -2020,7 +2168,7 @@ class _SleepDiaryEntryScreenState extends State<SleepDiaryEntryScreen> {
                           quality['label'] as String,
                           style: TextStyle(
                             fontFamily: 'SF Pro Text',
-                            fontSize: 17,
+                            fontSize: 16, // Slightly smaller font
                             fontWeight: FontWeight.w600,
                             color: isSelected
                                 ? CupertinoColors.white
@@ -2031,11 +2179,14 @@ class _SleepDiaryEntryScreenState extends State<SleepDiaryEntryScreen> {
                           quality['subtext'] as String,
                           style: TextStyle(
                             fontFamily: 'SF Pro Text',
-                            fontSize: 15,
+                            fontSize: 14, // Slightly smaller font
                             color: isSelected
                                 ? CupertinoColors.white.withOpacity(0.8)
                                 : CupertinoColors.systemGrey,
                           ),
+                          maxLines: 1, // Limit to one line
+                          overflow: TextOverflow
+                              .ellipsis, // Add ellipsis if text is too long
                         ),
                       ],
                     ),
@@ -3190,13 +3341,13 @@ class _SleepDiaryEntryScreenState extends State<SleepDiaryEntryScreen> {
     // These checks are kept as a final safety check
 
     // Q3 (if not skipped)
-    if (timeToFallAsleep >= 3 && !_q3Skipped && _hasLeftBed == null) {
-      return '請選擇是否有離開床舖。';
+    if (timeToFallAsleep > 5 && !_q3Skipped && _sleepDifficultyReason == null) {
+      return '請選擇睡不著的原因。';
     }
 
-    // Q4
-    if (_sleepDifficultyReason == null) {
-      return '請選擇睡不著的原因。';
+    // Q4 (if not skipped)
+    if (timeToFallAsleep > 5 && !_q3Skipped && _hasLeftBed == null) {
+      return '請選擇是否有離開床舖。';
     }
 
     // Q5 - Validate wake-up times
@@ -3207,8 +3358,8 @@ class _SleepDiaryEntryScreenState extends State<SleepDiaryEntryScreen> {
       }
     }
 
-    // Q6
-    if (_wakeUpDifficultyReason == null) {
+    // Q9 (only validate if user woke up during sleep)
+    if (_wokeUpDuringSleep == true && _wakeUpDifficultyReason == null) {
       return '請選擇醒著的原因。';
     }
 
@@ -3293,6 +3444,82 @@ class _SleepDiaryEntryScreenState extends State<SleepDiaryEntryScreen> {
           textAlign: TextAlign.end,
         ),
       ],
+    );
+  }
+
+  Widget _buildSleepDifficultyReasonPage() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          '下列哪一項最讓你睡不著？',
+          style: TextStyle(
+            fontFamily: 'SF Pro Display',
+            fontSize: 24,
+            fontWeight: FontWeight.bold,
+            color: CupertinoColors.label,
+          ),
+        ),
+        const SizedBox(height: 8),
+        const Text(
+          '請選擇最接近的一項',
+          style: TextStyle(
+            fontFamily: 'SF Pro Text',
+            fontSize: 17,
+            color: CupertinoColors.systemGrey,
+          ),
+        ),
+        const SizedBox(height: 24),
+        _buildSleepDifficultyReasonSection(),
+      ],
+    );
+  }
+
+  Widget _buildSleepDifficultyReasonSection() {
+    final reasons = [
+      '思緒奔騰',
+      '身體躁動不安',
+      '憂慮或焦慮',
+      '其他',
+      '以上皆無',
+    ];
+
+    return Column(
+      children: reasons.map((reason) {
+        final isSelected = _sleepDifficultyReason == reason;
+        return GestureDetector(
+          onTap: () => setState(
+              () => _sleepDifficultyReason = isSelected ? null : reason),
+          child: Container(
+            width: double.infinity,
+            margin: const EdgeInsets.only(bottom: 12),
+            padding: const EdgeInsets.symmetric(
+              horizontal: 16,
+              vertical: 14,
+            ),
+            decoration: BoxDecoration(
+              color: CupertinoColors.systemBackground,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: isSelected
+                    ? CupertinoColors.activeBlue
+                    : CupertinoColors.systemGrey5,
+                width: 1,
+              ),
+            ),
+            child: Text(
+              reason,
+              style: TextStyle(
+                fontFamily: 'SF Pro Text',
+                fontSize: 17,
+                color: isSelected
+                    ? CupertinoColors.activeBlue
+                    : CupertinoColors.label,
+              ),
+            ),
+          ),
+        );
+      }).toList(),
     );
   }
 }

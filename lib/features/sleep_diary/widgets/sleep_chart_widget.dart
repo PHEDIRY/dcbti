@@ -190,7 +190,31 @@ class _SleepChartWidgetState extends State<SleepChartWidget> {
                   topTitles: const AxisTitles(
                     sideTitles: SideTitles(showTitles: false),
                   ),
-                  rightTitles: const AxisTitles(
+                  rightTitles: AxisTitles(
+                    sideTitles: SideTitles(
+                      showTitles: true,
+                      interval: 120, // Show every 2 hours
+                      getTitlesWidget: (value, meta) {
+                        // Only show labels at 2-hour intervals
+                        if (value % 120 != 0) {
+                          return const SizedBox.shrink();
+                        }
+
+                        return Padding(
+                          padding: const EdgeInsets.only(left: 8.0),
+                          child: Text(
+                            _formatTimeLabel(value),
+                            style: const TextStyle(
+                              color: CupertinoColors.systemGrey,
+                              fontSize: 12,
+                            ),
+                          ),
+                        );
+                      },
+                      reservedSize: 40,
+                    ),
+                  ),
+                  leftTitles: const AxisTitles(
                     sideTitles: SideTitles(showTitles: false),
                   ),
                   bottomTitles: AxisTitles(
@@ -233,30 +257,6 @@ class _SleepChartWidgetState extends State<SleepChartWidget> {
                       reservedSize: 40,
                     ),
                   ),
-                  leftTitles: AxisTitles(
-                    sideTitles: SideTitles(
-                      showTitles: true,
-                      interval: 120, // Show every 2 hours
-                      getTitlesWidget: (value, meta) {
-                        // Only show labels at 2-hour intervals
-                        if (value % 120 != 0) {
-                          return const SizedBox.shrink();
-                        }
-
-                        return Padding(
-                          padding: const EdgeInsets.only(right: 8.0),
-                          child: Text(
-                            _formatTimeLabel(value),
-                            style: const TextStyle(
-                              color: CupertinoColors.systemGrey,
-                              fontSize: 12,
-                            ),
-                          ),
-                        );
-                      },
-                      reservedSize: 40,
-                    ),
-                  ),
                 ),
                 barGroups: _buildBarGroups(),
                 barTouchData: BarTouchData(
@@ -265,6 +265,8 @@ class _SleepChartWidgetState extends State<SleepChartWidget> {
                         CupertinoColors.systemBackground.withOpacity(0.8),
                     tooltipPadding: const EdgeInsets.all(8),
                     tooltipMargin: 8,
+                    fitInsideHorizontally: true,
+                    fitInsideVertically: true,
                     getTooltipItem: (group, groupIndex, rod, rodIndex) {
                       final entry = _weekEntries[groupIndex];
                       final dateFormat = DateFormat('yyyy年MM月dd日');
@@ -297,6 +299,9 @@ class _SleepChartWidgetState extends State<SleepChartWidget> {
                       });
                     }
                   },
+                  touchExtraThreshold:
+                      const EdgeInsets.symmetric(horizontal: 20, vertical: 150),
+                  handleBuiltInTouches: true,
                 ),
               ),
             ),
