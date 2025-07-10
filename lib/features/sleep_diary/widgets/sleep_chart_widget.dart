@@ -19,12 +19,50 @@ class SleepChartWidget extends StatefulWidget {
 
 class _SleepChartWidgetState extends State<SleepChartWidget> {
   final SleepAnalysisService _analysisService = SleepAnalysisService();
-  List<SleepDiaryEntry> _weekEntries = [];
+  List<SleepDiaryEntry?> _weekEntries =
+      []; // Changed to nullable to handle empty days
   int? _selectedBarIndex;
 
   // Y-axis range (in minutes, 0 = midnight)
   double _minY = 0; // Will be set in _processData
   double _maxY = 0; // Will be set in _processData
+
+  // Get Chinese day of week
+  String _getChineseDayOfWeek(DateTime date) {
+    final days = ['日', '一', '二', '三', '四', '五', '六'];
+    return days[date.weekday % 7];
+  }
+
+  // Get the last 7 days entries, with null for days without entries
+  List<SleepDiaryEntry?> _getLastSevenDaysEntries() {
+    final now = DateTime.now();
+    final lastSevenDays = List.generate(7, (index) {
+      final date = now.subtract(Duration(days: 6 - index));
+      return DateTime(date.year, date.month, date.day);
+    });
+
+    // Group entries by date
+    final entriesByDate = <DateTime, List<SleepDiaryEntry>>{};
+    for (var entry in widget.entries) {
+      final entryDate = DateTime(
+        entry.entryDate.year,
+        entry.entryDate.month,
+        entry.entryDate.day,
+      );
+      entriesByDate.putIfAbsent(entryDate, () => []).add(entry);
+    }
+
+    // For each of the last 7 days, get the latest entry or null
+    return lastSevenDays.map((date) {
+      final dayEntries = entriesByDate[date];
+      if (dayEntries == null || dayEntries.isEmpty) {
+        return null;
+      }
+      // Sort by created time and get the latest
+      dayEntries.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+      return dayEntries.first;
+    }).toList();
+  }
 
   @override
   void initState() {
@@ -41,17 +79,15 @@ class _SleepChartWidgetState extends State<SleepChartWidget> {
   }
 
   void _processData() {
-    // Get entries for the last 7 days, sorted by date
-    _weekEntries = _analysisService.getLastWeekEntries(widget.entries)
-      ..sort((a, b) => a.entryDate.compareTo(b.entryDate));
-
-    if (_weekEntries.isEmpty) return;
+    _weekEntries = _getLastSevenDaysEntries();
 
     // Find min and max time for y-axis scaling
     double earliestBedTime = double.infinity;
     double latestWakeTime = -double.infinity;
 
     for (var entry in _weekEntries) {
+      if (entry == null) continue;
+
       // Convert to normalized minutes (minutes since midnight, can be negative for previous day)
       final bedTimeMinutes = _normalizeTimeToMinutes(entry.bedTime);
       final wakeTimeMinutes = _normalizeTimeToMinutes(entry.wakeTime) +
@@ -64,6 +100,12 @@ class _SleepChartWidgetState extends State<SleepChartWidget> {
       if (wakeTimeMinutes > latestWakeTime) {
         latestWakeTime = wakeTimeMinutes;
       }
+    }
+
+    // If no entries, set default range
+    if (earliestBedTime == double.infinity) {
+      earliestBedTime = -120; // 10 PM previous day
+      latestWakeTime = 480; // 8 AM
     }
 
     // Add padding (30 minutes on each end)
@@ -82,7 +124,6 @@ class _SleepChartWidgetState extends State<SleepChartWidget> {
     }
 
     // Invert the values so that earlier times (smaller values) appear at the top
-    // We do this by making all values negative and swapping min/max
     _minY = -maxTime;
     _maxY = -minTime;
   }
@@ -120,216 +161,30 @@ class _SleepChartWidgetState extends State<SleepChartWidget> {
     return '${efficiency.toStringAsFixed(0)}%';
   }
 
-  // Get day of week abbreviation
-  String _getDayOfWeek(DateTime date) {
-    final days = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'];
-    return days[date.weekday % 7];
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    if (_weekEntries.isEmpty) {
-      return const SizedBox.shrink();
-    }
-
-    return Container(
-      margin: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-      decoration: BoxDecoration(
-        color: CupertinoColors.systemBackground,
-        borderRadius: BorderRadius.circular(12),
-        boxShadow: [
-          BoxShadow(
-            color: CupertinoColors.systemGrey5.withOpacity(0.5),
-            blurRadius: 10,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text(
-            '睡眠模式',
-            style: TextStyle(
-              fontFamily: 'SF Pro Text',
-              fontSize: 17,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-          const SizedBox(height: 16),
-          SizedBox(
-            height: 300,
-            child: BarChart(
-              BarChartData(
-                alignment: BarChartAlignment.spaceAround,
-                maxY: _maxY,
-                minY: _minY,
-                gridData: FlGridData(
-                  show: true,
-                  horizontalInterval: 120, // 2-hour intervals
-                  drawVerticalLine: true,
-                  getDrawingHorizontalLine: (value) {
-                    return FlLine(
-                      color: CupertinoColors.systemGrey5,
-                      strokeWidth: 1,
-                      dashArray: [5, 5],
-                    );
-                  },
-                  getDrawingVerticalLine: (value) {
-                    return FlLine(
-                      color: CupertinoColors.systemGrey5,
-                      strokeWidth: 1,
-                      dashArray: [5, 5],
-                    );
-                  },
-                ),
-                borderData: FlBorderData(show: false),
-                titlesData: FlTitlesData(
-                  show: true,
-                  topTitles: const AxisTitles(
-                    sideTitles: SideTitles(showTitles: false),
-                  ),
-                  rightTitles: AxisTitles(
-                    sideTitles: SideTitles(
-                      showTitles: true,
-                      interval: 120, // Show every 2 hours
-                      getTitlesWidget: (value, meta) {
-                        // Only show labels at 2-hour intervals
-                        if (value % 120 != 0) {
-                          return const SizedBox.shrink();
-                        }
-
-                        return Padding(
-                          padding: const EdgeInsets.only(left: 8.0),
-                          child: Text(
-                            _formatTimeLabel(value),
-                            style: const TextStyle(
-                              color: CupertinoColors.systemGrey,
-                              fontSize: 12,
-                            ),
-                          ),
-                        );
-                      },
-                      reservedSize: 40,
-                    ),
-                  ),
-                  leftTitles: const AxisTitles(
-                    sideTitles: SideTitles(showTitles: false),
-                  ),
-                  bottomTitles: AxisTitles(
-                    sideTitles: SideTitles(
-                      showTitles: true,
-                      getTitlesWidget: (value, meta) {
-                        if (value < 0 || value >= _weekEntries.length) {
-                          return const SizedBox.shrink();
-                        }
-
-                        final entry = _weekEntries[value.toInt()];
-                        final dayText = _getDayOfWeek(entry.entryDate);
-
-                        return Column(
-                          children: [
-                            Text(
-                              _calculateEfficiency(entry),
-                              style: TextStyle(
-                                color: _selectedBarIndex == value.toInt()
-                                    ? CupertinoColors.activeBlue
-                                    : CupertinoColors.systemGrey,
-                                fontSize: 12,
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              dayText,
-                              style: TextStyle(
-                                color: _selectedBarIndex == value.toInt()
-                                    ? CupertinoColors.activeBlue
-                                    : CupertinoColors.systemGrey,
-                                fontSize: 14,
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
-                          ],
-                        );
-                      },
-                      reservedSize: 40,
-                    ),
-                  ),
-                ),
-                barGroups: _buildBarGroups(),
-                barTouchData: BarTouchData(
-                  touchTooltipData: BarTouchTooltipData(
-                    tooltipBgColor:
-                        CupertinoColors.systemBackground.withOpacity(0.8),
-                    tooltipPadding: const EdgeInsets.all(8),
-                    tooltipMargin: 8,
-                    fitInsideHorizontally: true,
-                    fitInsideVertically: true,
-                    getTooltipItem: (group, groupIndex, rod, rodIndex) {
-                      final entry = _weekEntries[groupIndex];
-                      final dateFormat = DateFormat('yyyy年MM月dd日');
-                      final timeFormat = DateFormat('HH:mm');
-
-                      return BarTooltipItem(
-                        '${dateFormat.format(entry.entryDate)}\n'
-                        '就寢時間: ${timeFormat.format(entry.bedTime)}\n'
-                        '起床時間: ${timeFormat.format(entry.wakeTime)}\n'
-                        '睡眠效率: ${_analysisService.calculateSE(entry).toStringAsFixed(1)}%\n'
-                        '總睡眠時間: ${_formatDuration(_analysisService.calculateTST(entry))}',
-                        const TextStyle(
-                          color: CupertinoColors.label,
-                          fontWeight: FontWeight.w500,
-                          fontSize: 14,
-                        ),
-                      );
-                    },
-                  ),
-                  touchCallback: (event, response) {
-                    if (event.isInterestedForInteractions &&
-                        response != null &&
-                        response.spot != null) {
-                      setState(() {
-                        _selectedBarIndex = response.spot!.touchedBarGroupIndex;
-                      });
-                    } else if (event is FlTapUpEvent) {
-                      setState(() {
-                        _selectedBarIndex = null;
-                      });
-                    }
-                  },
-                  touchExtraThreshold:
-                      const EdgeInsets.symmetric(horizontal: 20, vertical: 150),
-                  handleBuiltInTouches: true,
-                ),
-              ),
-            ),
-          ),
-          const SizedBox(height: 16),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              _buildLegendItem(
-                  color: CupertinoColors.systemIndigo, label: '睡眠中'),
-              const SizedBox(width: 16),
-              _buildLegendItem(
-                  color: CupertinoColors.systemOrange, label: '清醒'),
-              const SizedBox(width: 16),
-              _buildLegendItem(
-                  color: CupertinoColors.systemTeal, label: '離開床鋪'),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
   List<BarChartGroupData> _buildBarGroups() {
     List<BarChartGroupData> barGroups = [];
 
     for (int i = 0; i < _weekEntries.length; i++) {
       final entry = _weekEntries[i];
+
+      if (entry == null) {
+        // Empty bar for days without entries
+        barGroups.add(
+          BarChartGroupData(
+            x: i,
+            barRods: [
+              BarChartRodData(
+                toY: 0,
+                fromY: 0,
+                width: 25,
+                color: CupertinoColors.systemGrey6,
+              ),
+            ],
+          ),
+        );
+        continue;
+      }
+
       final segments = _createSleepSegments(entry);
 
       barGroups.add(
@@ -337,7 +192,6 @@ class _SleepChartWidgetState extends State<SleepChartWidget> {
           x: i,
           barRods: [
             BarChartRodData(
-              // Invert the Y values for correct display orientation
               toY: -(_normalizeTimeToMinutes(entry.bedTime)),
               fromY: -(_normalizeTimeToMinutes(entry.wakeTime) +
                   entry.timeInBedAfterWakingMinutes),
@@ -563,5 +417,210 @@ class _SleepChartWidgetState extends State<SleepChartWidget> {
     } else {
       return '$minutes分鐘';
     }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    // Get today's date to calculate the dates for x-axis labels
+    final now = DateTime.now();
+    final dates =
+        List.generate(7, (index) => now.subtract(Duration(days: 6 - index)));
+
+    return Container(
+      margin: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+      decoration: BoxDecoration(
+        color: CupertinoColors.systemBackground,
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: [
+          BoxShadow(
+            color: CupertinoColors.systemGrey5.withOpacity(0.5),
+            blurRadius: 10,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            '睡眠模式',
+            style: TextStyle(
+              fontFamily: 'SF Pro Text',
+              fontSize: 17,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(height: 16),
+          SizedBox(
+            height: 300,
+            child: BarChart(
+              BarChartData(
+                alignment: BarChartAlignment.spaceAround,
+                maxY: _maxY,
+                minY: _minY,
+                gridData: FlGridData(
+                  show: true,
+                  horizontalInterval: 120, // 2-hour intervals
+                  drawVerticalLine: true,
+                  getDrawingHorizontalLine: (value) {
+                    return const FlLine(
+                      color: CupertinoColors.systemGrey5,
+                      strokeWidth: 1,
+                      dashArray: [5, 5],
+                    );
+                  },
+                  getDrawingVerticalLine: (value) {
+                    return const FlLine(
+                      color: CupertinoColors.systemGrey5,
+                      strokeWidth: 1,
+                      dashArray: [5, 5],
+                    );
+                  },
+                ),
+                borderData: FlBorderData(show: false),
+                titlesData: FlTitlesData(
+                  show: true,
+                  topTitles: const AxisTitles(
+                    sideTitles: SideTitles(showTitles: false),
+                  ),
+                  rightTitles: AxisTitles(
+                    sideTitles: SideTitles(
+                      showTitles: true,
+                      interval: 120, // Show every 2 hours
+                      getTitlesWidget: (value, meta) {
+                        // Only show labels at 2-hour intervals
+                        if (value % 120 != 0) {
+                          return const SizedBox.shrink();
+                        }
+
+                        return Padding(
+                          padding: const EdgeInsets.only(left: 8.0),
+                          child: Text(
+                            _formatTimeLabel(value),
+                            style: const TextStyle(
+                              color: CupertinoColors.systemGrey,
+                              fontSize: 12,
+                            ),
+                          ),
+                        );
+                      },
+                      reservedSize: 40,
+                    ),
+                  ),
+                  leftTitles: const AxisTitles(
+                    sideTitles: SideTitles(showTitles: false),
+                  ),
+                  bottomTitles: AxisTitles(
+                    sideTitles: SideTitles(
+                      showTitles: true,
+                      getTitlesWidget: (value, meta) {
+                        if (value < 0 || value >= _weekEntries.length) {
+                          return const SizedBox.shrink();
+                        }
+
+                        final date = dates[value.toInt()];
+                        final dayText = _getChineseDayOfWeek(date);
+                        final entry = _weekEntries[value.toInt()];
+
+                        return Column(
+                          children: [
+                            Text(
+                              entry != null
+                                  ? _calculateEfficiency(entry)
+                                  : '--',
+                              style: TextStyle(
+                                color: _selectedBarIndex == value.toInt()
+                                    ? CupertinoColors.activeBlue
+                                    : CupertinoColors.systemGrey,
+                                fontSize: 12,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              dayText,
+                              style: TextStyle(
+                                color: _selectedBarIndex == value.toInt()
+                                    ? CupertinoColors.activeBlue
+                                    : CupertinoColors.systemGrey,
+                                fontSize: 14,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ],
+                        );
+                      },
+                      reservedSize: 40,
+                    ),
+                  ),
+                ),
+                barGroups: _buildBarGroups(),
+                barTouchData: BarTouchData(
+                  touchTooltipData: BarTouchTooltipData(
+                    tooltipBgColor:
+                        CupertinoColors.systemBackground.withOpacity(0.8),
+                    tooltipPadding: const EdgeInsets.all(8),
+                    tooltipMargin: 8,
+                    fitInsideHorizontally: true,
+                    fitInsideVertically: true,
+                    getTooltipItem: (group, groupIndex, rod, rodIndex) {
+                      final entry = _weekEntries[groupIndex];
+                      if (entry == null) return null;
+
+                      final dateFormat = DateFormat('yyyy年MM月dd日');
+                      final timeFormat = DateFormat('HH:mm');
+
+                      return BarTooltipItem(
+                        '${dateFormat.format(entry.entryDate)}\n'
+                        '就寢時間: ${timeFormat.format(entry.bedTime)}\n'
+                        '起床時間: ${timeFormat.format(entry.wakeTime)}\n'
+                        '睡眠效率: ${_analysisService.calculateSE(entry).toStringAsFixed(1)}%\n'
+                        '總睡眠時間: ${_formatDuration(_analysisService.calculateTST(entry))}',
+                        const TextStyle(
+                          color: CupertinoColors.label,
+                          fontWeight: FontWeight.w500,
+                          fontSize: 14,
+                        ),
+                      );
+                    },
+                  ),
+                  touchCallback: (event, response) {
+                    if (event.isInterestedForInteractions &&
+                        response != null &&
+                        response.spot != null) {
+                      setState(() {
+                        _selectedBarIndex = response.spot!.touchedBarGroupIndex;
+                      });
+                    } else if (event is FlTapUpEvent) {
+                      setState(() {
+                        _selectedBarIndex = null;
+                      });
+                    }
+                  },
+                  touchExtraThreshold:
+                      const EdgeInsets.symmetric(horizontal: 20, vertical: 150),
+                  handleBuiltInTouches: true,
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              _buildLegendItem(
+                  color: CupertinoColors.systemIndigo, label: '睡眠中'),
+              const SizedBox(width: 16),
+              _buildLegendItem(
+                  color: CupertinoColors.systemOrange, label: '清醒'),
+              const SizedBox(width: 16),
+              _buildLegendItem(
+                  color: CupertinoColors.systemTeal, label: '離開床鋪'),
+            ],
+          ),
+        ],
+      ),
+    );
   }
 }

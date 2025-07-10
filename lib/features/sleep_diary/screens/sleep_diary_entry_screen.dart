@@ -1186,7 +1186,7 @@ class _SleepDiaryEntryScreenState extends State<SleepDiaryEntryScreen> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const Text(
-          '躺上床之後，有在5分鐘之內睡著嗎？',
+          '有在5分鐘之內睡著嗎？',
           style: TextStyle(
             fontFamily: 'SF Pro Display',
             fontSize: 24,
@@ -1258,7 +1258,7 @@ class _SleepDiaryEntryScreenState extends State<SleepDiaryEntryScreen> {
     }
 
     return _buildDurationPicker(
-      title: '躺上床後，花了多長時間才入睡？',
+      title: '花了多長時間才入睡？',
       subtitle: '包含中間離開床的時間',
       hours: _timeToFallAsleepHours,
       minutes: _timeToFallAsleepMinutes,
@@ -1346,13 +1346,13 @@ class _SleepDiaryEntryScreenState extends State<SleepDiaryEntryScreen> {
     // Format the duration for the title
     String durationText = '';
     if (_timeToFallAsleepHours > 0) {
-      durationText += '${_timeToFallAsleepHours}小時';
+      durationText += '$_timeToFallAsleepHours小時';
     }
     if (_timeToFallAsleepMinutes > 0) {
       if (durationText.isNotEmpty) {
         durationText += ' ';
       }
-      durationText += '${_timeToFallAsleepMinutes}分鐘';
+      durationText += '$_timeToFallAsleepMinutes分鐘';
     }
 
     return Column(
@@ -1563,23 +1563,131 @@ class _SleepDiaryEntryScreenState extends State<SleepDiaryEntryScreen> {
                       ),
                     ],
                     const SizedBox(height: 16),
-                    _buildNumberInput(
-                      title: '清醒時長',
-                      value: event.stayedInBedMinutes,
-                      onChanged: (value) => _updateWakeUpEvent(
-                        index,
-                        WakeUpEvent(
-                          time: event.time,
-                          gotOutOfBed: event.gotOutOfBed,
-                          outOfBedDurationMinutes:
-                              event.outOfBedDurationMinutes,
-                          stayedInBedMinutes: value,
+                    // Replace counter with duration picker for 清醒時長
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          '清醒時長',
+                          style: TextStyle(
+                            fontFamily: 'SF Pro Text',
+                            fontSize: 17,
+                            fontWeight: FontWeight.w600,
+                            color: CupertinoColors.systemGrey,
+                          ),
                         ),
-                      ),
-                      suffix: '分鐘',
-                      minValue: 1,
+                        const SizedBox(height: 8),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            // Hours picker
+                            SizedBox(
+                              width: 60,
+                              height: 120,
+                              child: CupertinoPicker(
+                                selectionOverlay: null,
+                                magnification: 1.1,
+                                squeeze: 1.0,
+                                itemExtent: 32,
+                                scrollController: FixedExtentScrollController(
+                                  initialItem: event.stayedInBedMinutes ~/ 60,
+                                ),
+                                onSelectedItemChanged: (int value) {
+                                  final hours = value;
+                                  final minutes = event.stayedInBedMinutes % 60;
+                                  final newDuration = hours * 60 + minutes;
+                                  _updateWakeUpEvent(
+                                    index,
+                                    WakeUpEvent(
+                                      time: event.time,
+                                      gotOutOfBed: event.gotOutOfBed,
+                                      outOfBedDurationMinutes:
+                                          event.outOfBedDurationMinutes,
+                                      stayedInBedMinutes: newDuration,
+                                    ),
+                                  );
+                                },
+                                children:
+                                    List<Widget>.generate(24, (int index) {
+                                  return Center(
+                                    child: Text(
+                                      '$index',
+                                      style: const TextStyle(
+                                        fontFamily: 'SF Pro Text',
+                                        fontSize: 20,
+                                      ),
+                                    ),
+                                  );
+                                }),
+                              ),
+                            ),
+                            const Padding(
+                              padding: EdgeInsets.symmetric(horizontal: 8.0),
+                              child: Text(
+                                '小時',
+                                style: TextStyle(
+                                  fontFamily: 'SF Pro Text',
+                                  fontSize: 17,
+                                ),
+                              ),
+                            ),
+                            // Minutes picker
+                            SizedBox(
+                              width: 60,
+                              height: 120,
+                              child: CupertinoPicker(
+                                selectionOverlay: null,
+                                magnification: 1.1,
+                                squeeze: 1.0,
+                                itemExtent: 32,
+                                scrollController: FixedExtentScrollController(
+                                  initialItem: event.stayedInBedMinutes % 60,
+                                ),
+                                onSelectedItemChanged: (int value) {
+                                  final hours = event.stayedInBedMinutes ~/ 60;
+                                  final minutes = value;
+                                  final newDuration = hours * 60 + minutes;
+                                  _updateWakeUpEvent(
+                                    index,
+                                    WakeUpEvent(
+                                      time: event.time,
+                                      gotOutOfBed: event.gotOutOfBed,
+                                      outOfBedDurationMinutes:
+                                          event.outOfBedDurationMinutes,
+                                      stayedInBedMinutes: newDuration,
+                                    ),
+                                  );
+                                },
+                                children:
+                                    List<Widget>.generate(60, (int index) {
+                                  return Center(
+                                    child: Text(
+                                      index.toString().padLeft(2, '0'),
+                                      style: const TextStyle(
+                                        fontFamily: 'SF Pro Text',
+                                        fontSize: 20,
+                                      ),
+                                    ),
+                                  );
+                                }),
+                              ),
+                            ),
+                            const Padding(
+                              padding: EdgeInsets.symmetric(horizontal: 8.0),
+                              child: Text(
+                                '分鐘',
+                                style: TextStyle(
+                                  fontFamily: 'SF Pro Text',
+                                  fontSize: 17,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
                     ),
                     const SizedBox(height: 16),
+                    // Keep the switch for 是否下床
                     Row(
                       children: [
                         CupertinoSwitch(
@@ -1589,8 +1697,10 @@ class _SleepDiaryEntryScreenState extends State<SleepDiaryEntryScreen> {
                             WakeUpEvent(
                               time: event.time,
                               gotOutOfBed: value,
-                              outOfBedDurationMinutes:
-                                  value ? event.outOfBedDurationMinutes : null,
+                              outOfBedDurationMinutes: value
+                                  ? event.outOfBedDurationMinutes ??
+                                      (event.stayedInBedMinutes ~/ 2)
+                                  : null,
                               stayedInBedMinutes: event.stayedInBedMinutes,
                             ),
                           ),
@@ -1606,23 +1716,28 @@ class _SleepDiaryEntryScreenState extends State<SleepDiaryEntryScreen> {
                         ),
                       ],
                     ),
+                    // Add range slider for 下床時長 if gotOutOfBed is true
                     if (event.gotOutOfBed) ...[
                       const SizedBox(height: 16),
-                      _buildNumberInput(
-                        title: '下床時長',
-                        value: event.outOfBedDurationMinutes ?? 1,
-                        onChanged: (value) => _updateWakeUpEvent(
-                          index,
-                          WakeUpEvent(
-                            time: event.time,
-                            gotOutOfBed: event.gotOutOfBed,
-                            outOfBedDurationMinutes: value,
-                            stayedInBedMinutes: event.stayedInBedMinutes,
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            '下床時長',
+                            style: TextStyle(
+                              fontFamily: 'SF Pro Text',
+                              fontSize: 17,
+                              fontWeight: FontWeight.w600,
+                              color: CupertinoColors.systemGrey,
+                            ),
                           ),
-                        ),
-                        suffix: '分鐘',
-                        minValue: 1,
-                        maxValue: event.stayedInBedMinutes,
+                          const SizedBox(height: 8),
+                          // Range slider implementation
+                          _buildOutOfBedRangeSlider(
+                            index: index,
+                            event: event,
+                          ),
+                        ],
                       ),
                     ],
                   ],
@@ -2368,17 +2483,11 @@ class _SleepDiaryEntryScreenState extends State<SleepDiaryEntryScreen> {
       selectedPosition = (24 - minTime.hour) + time.hour;
     }
 
-    // For minutes, limit range if we're at boundary hours
-    bool isAtMinHour = time.day == minTime.day && time.hour == minTime.hour;
-    bool isAtMaxHour =
-        time.day == effectiveMaxTime.day && time.hour == effectiveMaxTime.hour;
-    int minMinute = isAtMinHour ? minTime.minute : 0;
-    int maxMinute = isAtMaxHour ? effectiveMaxTime.minute : 59;
-
+    // Remove minute range limitations - always show full range of minutes (0-59)
     final hourController =
         FixedExtentScrollController(initialItem: selectedPosition);
     final minuteController =
-        FixedExtentScrollController(initialItem: time.minute - minMinute);
+        FixedExtentScrollController(initialItem: time.minute);
 
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
@@ -2432,27 +2541,7 @@ class _SleepDiaryEntryScreenState extends State<SleepDiaryEntryScreen> {
                       );
                     }
 
-                    // Adjust minutes if needed
-                    int adjustedMinute = time.minute;
-                    if (newTime.day == minTime.day &&
-                        newHour == minTime.hour &&
-                        adjustedMinute < minTime.minute) {
-                      adjustedMinute = minTime.minute;
-                    }
-                    if (newTime.day == effectiveMaxTime.day &&
-                        newHour == effectiveMaxTime.hour &&
-                        adjustedMinute > effectiveMaxTime.minute) {
-                      adjustedMinute = effectiveMaxTime.minute;
-                    }
-
-                    newTime = DateTime(
-                      newTime.year,
-                      newTime.month,
-                      newTime.day,
-                      newHour,
-                      adjustedMinute,
-                    );
-
+                    // The final validation will happen when the user confirms the time
                     onChanged(newTime);
                   },
                   children: List<Widget>.generate(hoursFromMin, (int index) {
@@ -2505,21 +2594,18 @@ class _SleepDiaryEntryScreenState extends State<SleepDiaryEntryScreen> {
                   itemExtent: 40,
                   scrollController: minuteController,
                   onSelectedItemChanged: (int value) {
-                    int newMinute = minMinute + value;
                     onChanged(DateTime(
                       time.year,
                       time.month,
                       time.day,
                       time.hour,
-                      newMinute,
+                      value,
                     ));
                   },
-                  children: List<Widget>.generate(maxMinute - minMinute + 1,
-                      (int index) {
-                    final minute = minMinute + index;
+                  children: List<Widget>.generate(60, (int index) {
                     return Center(
                       child: Text(
-                        minute.toString().padLeft(2, '0'),
+                        index.toString().padLeft(2, '0'),
                         style: const TextStyle(
                           fontFamily: 'SF Pro Text',
                           fontSize: 22,
@@ -3520,6 +3606,631 @@ class _SleepDiaryEntryScreenState extends State<SleepDiaryEntryScreen> {
           ),
         );
       }).toList(),
+    );
+  }
+
+  // Add the new method for the range slider
+  Widget _buildOutOfBedRangeSlider({
+    required int index,
+    required WakeUpEvent event,
+  }) {
+    // Initialize values for the range slider
+    final totalDuration = event.stayedInBedMinutes;
+
+    // Default to half of the total duration if not set
+    final outOfBedDuration =
+        event.outOfBedDurationMinutes ?? (totalDuration ~/ 2);
+
+    // Start position defaults to 1/4 of total duration
+    final startPosition = (totalDuration - outOfBedDuration) ~/ 2;
+    final endPosition = startPosition + outOfBedDuration;
+
+    // Format time labels
+    String formatMinutes(int minutes) {
+      final hours = minutes ~/ 60;
+      final mins = minutes % 60;
+      if (hours > 0) {
+        return '${hours}h ${mins}m';
+      }
+      return '${mins}m';
+    }
+
+    // Calculate wake-up episode start and end times
+    final wakeUpStart = event.time;
+    final wakeUpEnd = wakeUpStart?.add(Duration(minutes: totalDuration));
+
+    // Format time of day
+    String formatTimeOfDay(DateTime? time) {
+      if (time == null) return '--:--';
+      return DateFormat('HH:mm').format(time);
+    }
+
+    // Calculate out-of-bed times
+    final outOfBedStartTime =
+        wakeUpStart?.add(Duration(minutes: startPosition));
+    final outOfBedEndTime = wakeUpStart?.add(Duration(minutes: endPosition));
+
+    return StatefulBuilder(
+      builder: (context, setState) {
+        // Local state for slider positions
+        double startValue = startPosition / totalDuration.toDouble();
+        double endValue = endPosition / totalDuration.toDouble();
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Remove the total wake-up duration text label as requested
+
+            // Wake-up episode time range
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12.0),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    formatTimeOfDay(wakeUpStart),
+                    style: const TextStyle(
+                      fontFamily: 'SF Pro Text',
+                      fontSize: 12,
+                      color: CupertinoColors.systemGrey,
+                    ),
+                  ),
+                  Text(
+                    formatTimeOfDay(wakeUpEnd),
+                    style: const TextStyle(
+                      fontFamily: 'SF Pro Text',
+                      fontSize: 12,
+                      color: CupertinoColors.systemGrey,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 8),
+
+            // Main slider track
+            Container(
+              height: 44,
+              padding: const EdgeInsets.symmetric(horizontal: 12.0),
+              child: LayoutBuilder(builder: (context, constraints) {
+                final availableWidth = constraints.maxWidth;
+                return Stack(
+                  children: [
+                    // Base track (wake-up episode)
+                    Positioned(
+                      left: 0,
+                      right: 0,
+                      top: 20,
+                      child: Container(
+                        height: 4,
+                        decoration: BoxDecoration(
+                          color: CupertinoColors.systemGrey5,
+                          borderRadius: BorderRadius.circular(2),
+                        ),
+                      ),
+                    ),
+
+                    // Out-of-bed segment
+                    Positioned(
+                      left: startValue * availableWidth,
+                      width: (endValue - startValue) * availableWidth,
+                      top: 20,
+                      child: Container(
+                        height: 4,
+                        decoration: BoxDecoration(
+                          color: CupertinoColors.activeBlue,
+                          borderRadius: BorderRadius.circular(2),
+                        ),
+                      ),
+                    ),
+
+                    // Start handle
+                    Positioned(
+                      left: startValue * availableWidth - 12,
+                      top: 12,
+                      child: GestureDetector(
+                        onHorizontalDragUpdate: (details) {
+                          // Calculate new position
+                          final newPosition =
+                              startValue + details.delta.dx / availableWidth;
+                          // Clamp position to valid range (0.0 to endValue - minimum gap)
+                          final minGap =
+                              1.0 / totalDuration; // Minimum 1 minute gap
+                          final clampedPosition =
+                              newPosition.clamp(0.0, endValue - minGap);
+
+                          if (clampedPosition != startValue) {
+                            setState(() {
+                              startValue = clampedPosition;
+                            });
+
+                            final newStartMinutes =
+                                (startValue * totalDuration).round();
+                            // Don't update endValue, keep it fixed
+                            final newEndMinutes =
+                                (endValue * totalDuration).round();
+                            _updateWakeUpEvent(
+                              index,
+                              WakeUpEvent(
+                                time: event.time,
+                                gotOutOfBed: event.gotOutOfBed,
+                                outOfBedDurationMinutes:
+                                    newEndMinutes - newStartMinutes,
+                                stayedInBedMinutes: event.stayedInBedMinutes,
+                              ),
+                            );
+                          }
+                        },
+                        child: Container(
+                          width: 24,
+                          height: 24,
+                          decoration: BoxDecoration(
+                            color: CupertinoColors.white,
+                            shape: BoxShape.circle,
+                            border: Border.all(
+                              color: CupertinoColors.activeBlue,
+                              width: 2,
+                            ),
+                            boxShadow: [
+                              BoxShadow(
+                                color:
+                                    CupertinoColors.systemGrey.withOpacity(0.3),
+                                blurRadius: 4,
+                                offset: const Offset(0, 2),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+
+                    // End handle
+                    Positioned(
+                      left: endValue * availableWidth - 12,
+                      top: 12,
+                      child: GestureDetector(
+                        onHorizontalDragUpdate: (details) {
+                          // Calculate new position
+                          final newPosition =
+                              endValue + details.delta.dx / availableWidth;
+                          // Clamp position to valid range (startValue + minimum gap to 1.0)
+                          final minGap =
+                              1.0 / totalDuration; // Minimum 1 minute gap
+                          final clampedPosition =
+                              newPosition.clamp(startValue + minGap, 1.0);
+
+                          if (clampedPosition != endValue) {
+                            setState(() {
+                              endValue = clampedPosition;
+                            });
+
+                            // Don't update startValue, keep it fixed
+                            final newStartMinutes =
+                                (startValue * totalDuration).round();
+                            final newEndMinutes =
+                                (endValue * totalDuration).round();
+                            _updateWakeUpEvent(
+                              index,
+                              WakeUpEvent(
+                                time: event.time,
+                                gotOutOfBed: event.gotOutOfBed,
+                                outOfBedDurationMinutes:
+                                    newEndMinutes - newStartMinutes,
+                                stayedInBedMinutes: event.stayedInBedMinutes,
+                              ),
+                            );
+                          }
+                        },
+                        child: Container(
+                          width: 24,
+                          height: 24,
+                          decoration: BoxDecoration(
+                            color: CupertinoColors.white,
+                            shape: BoxShape.circle,
+                            border: Border.all(
+                              color: CupertinoColors.activeBlue,
+                              width: 2,
+                            ),
+                            boxShadow: [
+                              BoxShadow(
+                                color:
+                                    CupertinoColors.systemGrey.withOpacity(0.3),
+                                blurRadius: 4,
+                                offset: const Offset(0, 2),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                );
+              }),
+            ),
+
+            const SizedBox(height: 8),
+
+            // Out-of-bed time labels
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12.0),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        '開始下床',
+                        style: const TextStyle(
+                          fontFamily: 'SF Pro Text',
+                          fontSize: 12,
+                          color: CupertinoColors.systemGrey,
+                        ),
+                      ),
+                      Text(
+                        formatTimeOfDay(wakeUpStart?.add(Duration(
+                            minutes: (startValue * totalDuration).round()))),
+                        style: const TextStyle(
+                          fontFamily: 'SF Pro Text',
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                          color: CupertinoColors.activeBlue,
+                        ),
+                      ),
+                    ],
+                  ),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      Text(
+                        '結束下床',
+                        style: const TextStyle(
+                          fontFamily: 'SF Pro Text',
+                          fontSize: 12,
+                          color: CupertinoColors.systemGrey,
+                        ),
+                      ),
+                      Text(
+                        formatTimeOfDay(wakeUpStart?.add(Duration(
+                            minutes: (endValue * totalDuration).round()))),
+                        style: const TextStyle(
+                          fontFamily: 'SF Pro Text',
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                          color: CupertinoColors.activeBlue,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+
+            const SizedBox(height: 8),
+
+            // Out-of-bed duration
+            Center(
+              child: Text(
+                '下床時長: ${formatMinutes((endValue * totalDuration).round() - (startValue * totalDuration).round())}',
+                style: const TextStyle(
+                  fontFamily: 'SF Pro Text',
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                  color: CupertinoColors.systemGrey,
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+}
+
+// Add the custom wake-up slider widget
+class CustomWakeUpSlider extends StatefulWidget {
+  final int totalDuration;
+  final int outOfBedStart;
+  final int outOfBedEnd;
+  final DateTime? wakeUpStartTime;
+  final Function(int, int) onChanged;
+
+  const CustomWakeUpSlider({
+    Key? key,
+    required this.totalDuration,
+    required this.outOfBedStart,
+    required this.outOfBedEnd,
+    this.wakeUpStartTime,
+    required this.onChanged,
+  }) : super(key: key);
+
+  @override
+  State<CustomWakeUpSlider> createState() => _CustomWakeUpSliderState();
+}
+
+class _CustomWakeUpSliderState extends State<CustomWakeUpSlider> {
+  late double _startValue;
+  late double _endValue;
+
+  @override
+  void initState() {
+    super.initState();
+    _startValue = widget.outOfBedStart / widget.totalDuration.toDouble();
+    _endValue = widget.outOfBedEnd / widget.totalDuration.toDouble();
+  }
+
+  @override
+  void didUpdateWidget(CustomWakeUpSlider oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.outOfBedStart != widget.outOfBedStart ||
+        oldWidget.outOfBedEnd != widget.outOfBedEnd ||
+        oldWidget.totalDuration != widget.totalDuration) {
+      _startValue = widget.outOfBedStart / widget.totalDuration.toDouble();
+      _endValue = widget.outOfBedEnd / widget.totalDuration.toDouble();
+    }
+  }
+
+  // Format minutes to a readable string
+  String formatMinutes(int minutes) {
+    final hours = minutes ~/ 60;
+    final mins = minutes % 60;
+    if (hours > 0) {
+      return '${hours}h ${mins}m';
+    }
+    return '${mins}m';
+  }
+
+  // Format time of day
+  String formatTimeOfDay(DateTime? time) {
+    if (time == null) return '--:--';
+    return DateFormat('HH:mm').format(time);
+  }
+
+  // Calculate actual time based on minutes from wake-up start
+  DateTime? calculateTime(int minutesFromStart) {
+    if (widget.wakeUpStartTime == null) return null;
+    return widget.wakeUpStartTime!.add(Duration(minutes: minutesFromStart));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final startMinutes = (_startValue * widget.totalDuration).round();
+    final endMinutes = (_endValue * widget.totalDuration).round();
+    final outOfBedDuration = endMinutes - startMinutes;
+
+    final wakeUpStartTime = widget.wakeUpStartTime;
+    final wakeUpEndTime =
+        wakeUpStartTime?.add(Duration(minutes: widget.totalDuration));
+
+    final outOfBedStartTime = calculateTime(startMinutes);
+    final outOfBedEndTime = calculateTime(endMinutes);
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 4.0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // Wake-up episode time range
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                formatTimeOfDay(wakeUpStartTime),
+                style: const TextStyle(
+                  fontFamily: 'SF Pro Text',
+                  fontSize: 12,
+                  color: CupertinoColors.systemGrey,
+                ),
+              ),
+              Text(
+                formatTimeOfDay(wakeUpEndTime),
+                style: const TextStyle(
+                  fontFamily: 'SF Pro Text',
+                  fontSize: 12,
+                  color: CupertinoColors.systemGrey,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+
+          // Main slider track
+          Container(
+            height: 44,
+            child: Stack(
+              children: [
+                // Base track (wake-up episode)
+                Positioned(
+                  left: 0,
+                  right: 0,
+                  top: 20,
+                  child: Container(
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: CupertinoColors.systemGrey5,
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                ),
+
+                // Out-of-bed segment
+                Positioned(
+                  left: _startValue * MediaQuery.of(context).size.width * 0.9,
+                  width: (_endValue - _startValue) *
+                      MediaQuery.of(context).size.width *
+                      0.9,
+                  top: 20,
+                  child: Container(
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: CupertinoColors.activeBlue,
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                ),
+
+                // Start handle
+                Positioned(
+                  left: _startValue * MediaQuery.of(context).size.width * 0.9 -
+                      12,
+                  top: 12,
+                  child: GestureDetector(
+                    onHorizontalDragUpdate: (details) {
+                      final width = MediaQuery.of(context).size.width * 0.9;
+                      final newPosition =
+                          (_startValue * width + details.delta.dx) / width;
+                      final clampedPosition =
+                          newPosition.clamp(0.0, _endValue - 0.05);
+
+                      setState(() {
+                        _startValue = clampedPosition;
+                      });
+
+                      final newStartMinutes =
+                          (_startValue * widget.totalDuration).round();
+                      final newEndMinutes =
+                          (_endValue * widget.totalDuration).round();
+                      widget.onChanged(newStartMinutes, newEndMinutes);
+                    },
+                    child: Container(
+                      width: 24,
+                      height: 24,
+                      decoration: BoxDecoration(
+                        color: CupertinoColors.white,
+                        shape: BoxShape.circle,
+                        border: Border.all(
+                          color: CupertinoColors.activeBlue,
+                          width: 2,
+                        ),
+                        boxShadow: [
+                          BoxShadow(
+                            color: CupertinoColors.systemGrey.withOpacity(0.3),
+                            blurRadius: 4,
+                            offset: const Offset(0, 2),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+
+                // End handle
+                Positioned(
+                  left:
+                      _endValue * MediaQuery.of(context).size.width * 0.9 - 12,
+                  top: 12,
+                  child: GestureDetector(
+                    onHorizontalDragUpdate: (details) {
+                      final width = MediaQuery.of(context).size.width * 0.9;
+                      final newPosition =
+                          (_endValue * width + details.delta.dx) / width;
+                      final clampedPosition =
+                          newPosition.clamp(_startValue + 0.05, 1.0);
+
+                      setState(() {
+                        _endValue = clampedPosition;
+                      });
+
+                      final newStartMinutes =
+                          (_startValue * widget.totalDuration).round();
+                      final newEndMinutes =
+                          (_endValue * widget.totalDuration).round();
+                      widget.onChanged(newStartMinutes, newEndMinutes);
+                    },
+                    child: Container(
+                      width: 24,
+                      height: 24,
+                      decoration: BoxDecoration(
+                        color: CupertinoColors.white,
+                        shape: BoxShape.circle,
+                        border: Border.all(
+                          color: CupertinoColors.activeBlue,
+                          width: 2,
+                        ),
+                        boxShadow: [
+                          BoxShadow(
+                            color: CupertinoColors.systemGrey.withOpacity(0.3),
+                            blurRadius: 4,
+                            offset: const Offset(0, 2),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          const SizedBox(height: 8),
+
+          // Out-of-bed time labels
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    '開始下床',
+                    style: const TextStyle(
+                      fontFamily: 'SF Pro Text',
+                      fontSize: 12,
+                      color: CupertinoColors.systemGrey,
+                    ),
+                  ),
+                  Text(
+                    formatTimeOfDay(outOfBedStartTime),
+                    style: const TextStyle(
+                      fontFamily: 'SF Pro Text',
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: CupertinoColors.activeBlue,
+                    ),
+                  ),
+                ],
+              ),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Text(
+                    '結束下床',
+                    style: const TextStyle(
+                      fontFamily: 'SF Pro Text',
+                      fontSize: 12,
+                      color: CupertinoColors.systemGrey,
+                    ),
+                  ),
+                  Text(
+                    formatTimeOfDay(outOfBedEndTime),
+                    style: const TextStyle(
+                      fontFamily: 'SF Pro Text',
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: CupertinoColors.activeBlue,
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+
+          const SizedBox(height: 8),
+
+          // Out-of-bed duration
+          Center(
+            child: Text(
+              '下床時長: ${formatMinutes(outOfBedDuration)}',
+              style: const TextStyle(
+                fontFamily: 'SF Pro Text',
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+                color: CupertinoColors.systemGrey,
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

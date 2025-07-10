@@ -282,6 +282,78 @@ class _SleepDiaryListScreenState extends State<SleepDiaryListScreen> {
     );
   }
 
+  String _getTagDisplayName(String tag) {
+    // Translate tags to Traditional Chinese
+    switch (tag) {
+      case 'exercise':
+        return '運動';
+      case 'nap_longer_than_30min':
+        return '長時間午睡';
+      case 'sunlight_within_30min_of_waking':
+        return '早晨曬太陽';
+      case 'yoga':
+        return '瑜伽';
+      case 'caffeine_after_12pm':
+        return '下午咖啡因';
+      case 'stretching':
+        return '伸展';
+      case 'meditation':
+        return '冥想';
+      case 'reading':
+        return '閱讀';
+      case 'eat_within_3hours_of_bed':
+        return '睡前進食';
+      case 'journaling':
+        return '寫日記';
+      case 'alcohol_within_3hours_of_bed':
+        return '睡前飲酒';
+      case 'shower':
+        return '淋浴';
+      case 'worked_late':
+        return '熬夜工作';
+      case 'socialized_late':
+        return '熬夜社交';
+      case 'screen_time_within_1hour_of_bed':
+        return '使用螢幕';
+      case 'capa_therapy':
+        return 'CAPA治療';
+      case 'sleeping_pills':
+        return '安眠藥';
+      case 'melatonin':
+        return '褪黑激素';
+      case 'supplements_herbs':
+        return '補充劑/草藥';
+      case 'cbd_thc':
+        return 'CBD/THC';
+      case 'nicotine_tobacco':
+        return '尼古丁/菸草';
+      case 'other_medications':
+        return '其他藥物';
+      case 'stress_racing_thoughts':
+        return '壓力/思緒紛飛';
+      case 'nightmares':
+        return '惡夢';
+      case 'light':
+        return '光線';
+      case 'noises':
+        return '噪音';
+      case 'temperature':
+        return '溫度';
+      case 'snoring':
+        return '打鼾';
+      case 'woke_for_bathroom':
+        return '如廁';
+      case 'kids_partner_pets':
+        return '家人/寵物干擾';
+      case 'travel_jet_lag':
+        return '時差';
+      case 'pain_illness_injury':
+        return '身體不適';
+      default:
+        return tag;
+    }
+  }
+
   Widget _buildEntryCard(SleepDiaryEntry entry) {
     final dateFormat = DateFormat('yyyy年MM月dd日');
     final timeFormat = DateFormat('HH:mm');
@@ -543,6 +615,94 @@ class _SleepDiaryListScreenState extends State<SleepDiaryListScreen> {
                     ),
                   ],
                 ),
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            '床上時間',
+                            style: TextStyle(
+                              fontFamily: 'SF Pro Text',
+                              fontSize: 13,
+                              color: CupertinoColors.systemGrey,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            _formatDuration(
+                                _analysisService.calculateTIB(entry)),
+                            style: const TextStyle(
+                              fontFamily: 'SF Pro Text',
+                              fontSize: 17,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            '夜醒時間',
+                            style: TextStyle(
+                              fontFamily: 'SF Pro Text',
+                              fontSize: 13,
+                              color: CupertinoColors.systemGrey,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            _formatDuration(Duration(
+                                minutes:
+                                    _analysisService.calculateWASO(entry))),
+                            style: const TextStyle(
+                              fontFamily: 'SF Pro Text',
+                              fontSize: 17,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            '賴床時間',
+                            style: TextStyle(
+                              fontFamily: 'SF Pro Text',
+                              fontSize: 13,
+                              color: CupertinoColors.systemGrey,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            _formatDuration(Duration(
+                                minutes: _analysisService.calculateLIB(entry))),
+                            style: const TextStyle(
+                              fontFamily: 'SF Pro Text',
+                              fontSize: 17,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const Expanded(
+                        child: SizedBox()), // Empty space for alignment
+                  ],
+                ),
                 if (entry.sleepTags.isNotEmpty) ...[
                   const SizedBox(height: 12),
                   Wrap(
@@ -558,7 +718,7 @@ class _SleepDiaryListScreenState extends State<SleepDiaryListScreen> {
                             borderRadius: BorderRadius.circular(8),
                           ),
                           child: Text(
-                            tag,
+                            _getTagDisplayName(tag),
                             style: const TextStyle(
                               fontFamily: 'SF Pro Text',
                               fontSize: 12,
@@ -699,11 +859,11 @@ class _SleepDiaryListScreenState extends State<SleepDiaryListScreen> {
                   padding: const EdgeInsets.all(16),
                   color: CupertinoColors.activeBlue,
                   borderRadius: BorderRadius.circular(30),
+                  onPressed: _navigateToEntryScreen,
                   child: const Icon(
                     CupertinoIcons.add,
                     color: CupertinoColors.white,
                   ),
-                  onPressed: _navigateToEntryScreen,
                 ),
               ),
           ],

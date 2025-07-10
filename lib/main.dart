@@ -277,12 +277,12 @@ class _HomePageState extends State<HomePage> {
                   // Sleep Diary Button
                   CupertinoButton.filled(
                     onPressed: _navigateToSleepDiaryList,
-                    child: Row(
+                    child: const Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        const Icon(CupertinoIcons.moon_fill),
-                        const SizedBox(width: 8),
-                        const Text('睡眠日記'),
+                        Icon(CupertinoIcons.moon_fill),
+                        SizedBox(width: 8),
+                        Text('睡眠日記'),
                       ],
                     ),
                   ),
@@ -296,12 +296,12 @@ class _HomePageState extends State<HomePage> {
                         ),
                       );
                     },
-                    child: Row(
+                    child: const Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        const Icon(CupertinoIcons.add_circled),
-                        const SizedBox(width: 8),
-                        const Text('新增睡眠日記'),
+                        Icon(CupertinoIcons.add_circled),
+                        SizedBox(width: 8),
+                        Text('新增睡眠日記'),
                       ],
                     ),
                   ),

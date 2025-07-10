@@ -49,17 +49,45 @@ class SleepAnalysisService {
 
   // Calculate Total Sleep Time (TST)
   Duration calculateTST(SleepDiaryEntry entry) {
-    // Total time between bed and wake, minus time to fall asleep and WASO
-    final totalMinutes = entry.wakeTime.difference(entry.bedTime).inMinutes -
-        entry.timeToFallAsleepMinutes -
-        calculateWASO(entry);
+    // Start with time between bed time and final awakening
+    final totalMinutes =
+        entry.finalAwakeningTime.difference(entry.bedTime).inMinutes;
 
-    return Duration(minutes: totalMinutes > 0 ? totalMinutes : 0);
+    // Subtract:
+    // 1. Time to fall asleep (SOL)
+    int nonSleepMinutes = entry.timeToFallAsleepMinutes;
+
+    // 2. Time spent in bed but awake during WASO events
+    for (var wakeEvent in entry.wakeUpEvents) {
+      nonSleepMinutes += wakeEvent.stayedInBedMinutes;
+    }
+
+    // Calculate final sleep time
+    final sleepMinutes = totalMinutes - nonSleepMinutes;
+
+    // Ensure non-negative duration
+    return Duration(minutes: sleepMinutes > 0 ? sleepMinutes : 0);
   }
 
   // Calculate Total Time in Bed (TIB)
   Duration calculateTIB(SleepDiaryEntry entry) {
-    return entry.wakeTime.difference(entry.bedTime);
+    // Calculate total time between getting into bed and final getting out of bed
+    final getUpTime = entry.wakeTime
+        .add(Duration(minutes: entry.timeInBedAfterWakingMinutes));
+    final totalMinutes = getUpTime.difference(entry.bedTime).inMinutes;
+
+    // Subtract time spent out of bed during initial sleep onset period
+    int outOfBedMinutes = entry.initialOutOfBedDurationMinutes ?? 0;
+
+    // Subtract time spent out of bed during wake after sleep onset periods
+    for (var wakeEvent in entry.wakeUpEvents) {
+      if (wakeEvent.gotOutOfBed && wakeEvent.outOfBedDurationMinutes != null) {
+        outOfBedMinutes += wakeEvent.outOfBedDurationMinutes!;
+      }
+    }
+
+    // Return total time minus out of bed time
+    return Duration(minutes: totalMinutes - outOfBedMinutes);
   }
 
   // Calculate Sleep Efficiency (SE)
