@@ -3617,18 +3617,10 @@ class _SleepDiaryEntryScreenState extends State<SleepDiaryEntryScreen> {
     // Initialize values for the range slider
     final totalDuration = event.stayedInBedMinutes;
 
-    // Default to half of the total duration if not set
-    final outOfBedDuration =
-        event.outOfBedDurationMinutes ?? (totalDuration ~/ 2);
-
-    // Start position defaults to 1/4 of total duration
-    final startPosition = (totalDuration - outOfBedDuration) ~/ 2;
-    final endPosition = startPosition + outOfBedDuration;
-
     // Format time labels
     String formatMinutes(int minutes) {
-      final hours = minutes ~/ 60;
-      final mins = minutes % 60;
+      final hours = minutes.abs() ~/ 60;
+      final mins = minutes.abs() % 60;
       if (hours > 0) {
         return '${hours}h ${mins}m';
       }
@@ -3645,22 +3637,34 @@ class _SleepDiaryEntryScreenState extends State<SleepDiaryEntryScreen> {
       return DateFormat('HH:mm').format(time);
     }
 
-    // Calculate out-of-bed times
-    final outOfBedStartTime =
-        wakeUpStart?.add(Duration(minutes: startPosition));
-    final outOfBedEndTime = wakeUpStart?.add(Duration(minutes: endPosition));
-
     return StatefulBuilder(
       builder: (context, setState) {
-        // Local state for slider positions
-        double startValue = startPosition / totalDuration.toDouble();
-        double endValue = endPosition / totalDuration.toDouble();
+        // Initialize handle positions based on existing values or defaults
+        double startValue;
+        double endValue;
+
+        if (event.outOfBedDurationMinutes != null) {
+          // If we have an existing duration, use stored values
+          int startMinutes = event.outOfBedStartMinutes ?? (totalDuration ~/ 5);
+          int endMinutes = startMinutes +
+              (event.outOfBedDurationMinutes ?? totalDuration ~/ 5);
+
+          // Convert to values between 0 and 1
+          startValue = startMinutes / totalDuration;
+          endValue = endMinutes / totalDuration;
+        } else {
+          // Default positions if no existing duration
+          startValue = 0.2;
+          endValue = 0.4;
+        }
+
+        // Ensure values are within bounds
+        startValue = startValue.clamp(0.0, 1.0);
+        endValue = endValue.clamp(0.0, 1.0);
 
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Remove the total wake-up duration text label as requested
-
             // Wake-up episode time range
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 12.0),
@@ -3687,6 +3691,35 @@ class _SleepDiaryEntryScreenState extends State<SleepDiaryEntryScreen> {
               ),
             ),
             const SizedBox(height: 8),
+
+            // Out of bed time range
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12.0),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    formatTimeOfDay(wakeUpStart?.add(Duration(
+                        minutes: (startValue * totalDuration).round()))),
+                    style: const TextStyle(
+                      fontFamily: 'SF Pro Text',
+                      fontSize: 12,
+                      color: CupertinoColors.systemRed,
+                    ),
+                  ),
+                  Text(
+                    formatTimeOfDay(wakeUpStart?.add(
+                        Duration(minutes: (endValue * totalDuration).round()))),
+                    style: const TextStyle(
+                      fontFamily: 'SF Pro Text',
+                      fontSize: 12,
+                      color: CupertinoColors.systemOrange,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 4),
 
             // Main slider track
             Container(
@@ -3718,7 +3751,7 @@ class _SleepDiaryEntryScreenState extends State<SleepDiaryEntryScreen> {
                       child: Container(
                         height: 4,
                         decoration: BoxDecoration(
-                          color: CupertinoColors.activeBlue,
+                          color: CupertinoColors.systemGrey3,
                           borderRadius: BorderRadius.circular(2),
                         ),
                       ),
@@ -3730,32 +3763,32 @@ class _SleepDiaryEntryScreenState extends State<SleepDiaryEntryScreen> {
                       top: 12,
                       child: GestureDetector(
                         onHorizontalDragUpdate: (details) {
-                          // Calculate new position
-                          final newPosition =
-                              startValue + details.delta.dx / availableWidth;
-                          // Clamp position to valid range (0.0 to endValue - minimum gap)
-                          final minGap =
-                              1.0 / totalDuration; // Minimum 1 minute gap
-                          final clampedPosition =
-                              newPosition.clamp(0.0, endValue - minGap);
+                          double newX =
+                              startValue * availableWidth + details.delta.dx;
+                          double newValue = newX / availableWidth;
 
-                          if (clampedPosition != startValue) {
+                          // Only constrain to track bounds
+                          if (newValue >= 0 && newValue <= 1) {
                             setState(() {
-                              startValue = clampedPosition;
+                              startValue = newValue;
                             });
 
-                            final newStartMinutes =
+                            // Calculate actual minutes from start of wake-up
+                            final startMinutes =
                                 (startValue * totalDuration).round();
-                            // Don't update endValue, keep it fixed
-                            final newEndMinutes =
+                            final endMinutes =
                                 (endValue * totalDuration).round();
+                            final outOfBedDurationMinutes =
+                                endMinutes - startMinutes;
+
                             _updateWakeUpEvent(
                               index,
                               WakeUpEvent(
                                 time: event.time,
                                 gotOutOfBed: event.gotOutOfBed,
                                 outOfBedDurationMinutes:
-                                    newEndMinutes - newStartMinutes,
+                                    outOfBedDurationMinutes,
+                                outOfBedStartMinutes: startMinutes,
                                 stayedInBedMinutes: event.stayedInBedMinutes,
                               ),
                             );
@@ -3768,7 +3801,7 @@ class _SleepDiaryEntryScreenState extends State<SleepDiaryEntryScreen> {
                             color: CupertinoColors.white,
                             shape: BoxShape.circle,
                             border: Border.all(
-                              color: CupertinoColors.activeBlue,
+                              color: CupertinoColors.systemRed,
                               width: 2,
                             ),
                             boxShadow: [
@@ -3790,32 +3823,32 @@ class _SleepDiaryEntryScreenState extends State<SleepDiaryEntryScreen> {
                       top: 12,
                       child: GestureDetector(
                         onHorizontalDragUpdate: (details) {
-                          // Calculate new position
-                          final newPosition =
-                              endValue + details.delta.dx / availableWidth;
-                          // Clamp position to valid range (startValue + minimum gap to 1.0)
-                          final minGap =
-                              1.0 / totalDuration; // Minimum 1 minute gap
-                          final clampedPosition =
-                              newPosition.clamp(startValue + minGap, 1.0);
+                          double newX =
+                              endValue * availableWidth + details.delta.dx;
+                          double newValue = newX / availableWidth;
 
-                          if (clampedPosition != endValue) {
+                          // Only constrain to track bounds
+                          if (newValue >= 0 && newValue <= 1) {
                             setState(() {
-                              endValue = clampedPosition;
+                              endValue = newValue;
                             });
 
-                            // Don't update startValue, keep it fixed
-                            final newStartMinutes =
+                            // Calculate actual minutes from start of wake-up
+                            final startMinutes =
                                 (startValue * totalDuration).round();
-                            final newEndMinutes =
+                            final endMinutes =
                                 (endValue * totalDuration).round();
+                            final outOfBedDurationMinutes =
+                                endMinutes - startMinutes;
+
                             _updateWakeUpEvent(
                               index,
                               WakeUpEvent(
                                 time: event.time,
                                 gotOutOfBed: event.gotOutOfBed,
                                 outOfBedDurationMinutes:
-                                    newEndMinutes - newStartMinutes,
+                                    outOfBedDurationMinutes,
+                                outOfBedStartMinutes: startMinutes,
                                 stayedInBedMinutes: event.stayedInBedMinutes,
                               ),
                             );
@@ -3828,7 +3861,7 @@ class _SleepDiaryEntryScreenState extends State<SleepDiaryEntryScreen> {
                             color: CupertinoColors.white,
                             shape: BoxShape.circle,
                             border: Border.all(
-                              color: CupertinoColors.activeBlue,
+                              color: CupertinoColors.systemOrange,
                               width: 2,
                             ),
                             boxShadow: [
@@ -3850,68 +3883,10 @@ class _SleepDiaryEntryScreenState extends State<SleepDiaryEntryScreen> {
 
             const SizedBox(height: 8),
 
-            // Out-of-bed time labels
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 12.0),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        '開始下床',
-                        style: const TextStyle(
-                          fontFamily: 'SF Pro Text',
-                          fontSize: 12,
-                          color: CupertinoColors.systemGrey,
-                        ),
-                      ),
-                      Text(
-                        formatTimeOfDay(wakeUpStart?.add(Duration(
-                            minutes: (startValue * totalDuration).round()))),
-                        style: const TextStyle(
-                          fontFamily: 'SF Pro Text',
-                          fontSize: 14,
-                          fontWeight: FontWeight.w600,
-                          color: CupertinoColors.activeBlue,
-                        ),
-                      ),
-                    ],
-                  ),
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.end,
-                    children: [
-                      Text(
-                        '結束下床',
-                        style: const TextStyle(
-                          fontFamily: 'SF Pro Text',
-                          fontSize: 12,
-                          color: CupertinoColors.systemGrey,
-                        ),
-                      ),
-                      Text(
-                        formatTimeOfDay(wakeUpStart?.add(Duration(
-                            minutes: (endValue * totalDuration).round()))),
-                        style: const TextStyle(
-                          fontFamily: 'SF Pro Text',
-                          fontSize: 14,
-                          fontWeight: FontWeight.w600,
-                          color: CupertinoColors.activeBlue,
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-
-            const SizedBox(height: 8),
-
-            // Out-of-bed duration
+            // Duration label
             Center(
               child: Text(
-                '下床時長: ${formatMinutes((endValue * totalDuration).round() - (startValue * totalDuration).round())}',
+                '下床時長: ${formatMinutes(((endValue - startValue) * totalDuration).round())}',
                 style: const TextStyle(
                   fontFamily: 'SF Pro Text',
                   fontSize: 14,
@@ -3951,6 +3926,9 @@ class CustomWakeUpSlider extends StatefulWidget {
 class _CustomWakeUpSliderState extends State<CustomWakeUpSlider> {
   late double _startValue;
   late double _endValue;
+  static const double handleSize = 24.0;
+  static const double trackHeight = 4.0;
+  static const double handleRadius = handleSize / 2;
 
   @override
   void initState() {
@@ -3992,6 +3970,15 @@ class _CustomWakeUpSliderState extends State<CustomWakeUpSlider> {
     return widget.wakeUpStartTime!.add(Duration(minutes: minutesFromStart));
   }
 
+  double _getTrackWidth(BuildContext context) {
+    // Reduce the width by 20% of screen width plus handle size
+    return MediaQuery.of(context).size.width * 0.8 - handleSize * 2;
+  }
+
+  double _getHandlePosition(double value, double trackWidth) {
+    return (value * trackWidth);
+  }
+
   @override
   Widget build(BuildContext context) {
     final startMinutes = (_startValue * widget.totalDuration).round();
@@ -4005,8 +3992,11 @@ class _CustomWakeUpSliderState extends State<CustomWakeUpSlider> {
     final outOfBedStartTime = calculateTime(startMinutes);
     final outOfBedEndTime = calculateTime(endMinutes);
 
+    final trackWidth = _getTrackWidth(context);
+
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 4.0),
+      padding: const EdgeInsets.symmetric(
+          horizontal: 24.0), // Increased padding for more space
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -4035,66 +4025,64 @@ class _CustomWakeUpSliderState extends State<CustomWakeUpSlider> {
           const SizedBox(height: 8),
 
           // Main slider track
-          Container(
+          SizedBox(
             height: 44,
             child: Stack(
               children: [
                 // Base track (wake-up episode)
                 Positioned(
-                  left: 0,
-                  right: 0,
+                  left: handleRadius,
+                  right: handleRadius,
                   top: 20,
                   child: Container(
-                    height: 4,
+                    height: trackHeight,
                     decoration: BoxDecoration(
                       color: CupertinoColors.systemGrey5,
-                      borderRadius: BorderRadius.circular(2),
+                      borderRadius: BorderRadius.circular(trackHeight / 2),
                     ),
                   ),
                 ),
 
                 // Out-of-bed segment
                 Positioned(
-                  left: _startValue * MediaQuery.of(context).size.width * 0.9,
-                  width: (_endValue - _startValue) *
-                      MediaQuery.of(context).size.width *
-                      0.9,
+                  left: handleRadius +
+                      _getHandlePosition(_startValue, trackWidth),
+                  width:
+                      _getHandlePosition(_endValue - _startValue, trackWidth),
                   top: 20,
                   child: Container(
-                    height: 4,
+                    height: trackHeight,
                     decoration: BoxDecoration(
                       color: CupertinoColors.activeBlue,
-                      borderRadius: BorderRadius.circular(2),
+                      borderRadius: BorderRadius.circular(trackHeight / 2),
                     ),
                   ),
                 ),
 
                 // Start handle
                 Positioned(
-                  left: _startValue * MediaQuery.of(context).size.width * 0.9 -
-                      12,
+                  left: _getHandlePosition(_startValue, trackWidth),
                   top: 12,
                   child: GestureDetector(
                     onHorizontalDragUpdate: (details) {
-                      final width = MediaQuery.of(context).size.width * 0.9;
-                      final newPosition =
-                          (_startValue * width + details.delta.dx) / width;
-                      final clampedPosition =
-                          newPosition.clamp(0.0, _endValue - 0.05);
+                      final delta = details.delta.dx / trackWidth;
+                      final newValue = _startValue + delta;
+                      final clampedValue =
+                          newValue.clamp(0.0, _endValue - 0.05);
 
-                      setState(() {
-                        _startValue = clampedPosition;
-                      });
+                      if (clampedValue != _startValue) {
+                        setState(() {
+                          _startValue = clampedValue;
+                        });
 
-                      final newStartMinutes =
-                          (_startValue * widget.totalDuration).round();
-                      final newEndMinutes =
-                          (_endValue * widget.totalDuration).round();
-                      widget.onChanged(newStartMinutes, newEndMinutes);
+                        final newStartMinutes =
+                            (_startValue * widget.totalDuration).round();
+                        widget.onChanged(newStartMinutes, endMinutes);
+                      }
                     },
                     child: Container(
-                      width: 24,
-                      height: 24,
+                      width: handleSize,
+                      height: handleSize,
                       decoration: BoxDecoration(
                         color: CupertinoColors.white,
                         shape: BoxShape.circle,
@@ -4116,30 +4104,28 @@ class _CustomWakeUpSliderState extends State<CustomWakeUpSlider> {
 
                 // End handle
                 Positioned(
-                  left:
-                      _endValue * MediaQuery.of(context).size.width * 0.9 - 12,
+                  left: _getHandlePosition(_endValue, trackWidth),
                   top: 12,
                   child: GestureDetector(
                     onHorizontalDragUpdate: (details) {
-                      final width = MediaQuery.of(context).size.width * 0.9;
-                      final newPosition =
-                          (_endValue * width + details.delta.dx) / width;
-                      final clampedPosition =
-                          newPosition.clamp(_startValue + 0.05, 1.0);
+                      final delta = details.delta.dx / trackWidth;
+                      final newValue = _endValue + delta;
+                      final clampedValue =
+                          newValue.clamp(_startValue + 0.05, 1.0);
 
-                      setState(() {
-                        _endValue = clampedPosition;
-                      });
+                      if (clampedValue != _endValue) {
+                        setState(() {
+                          _endValue = clampedValue;
+                        });
 
-                      final newStartMinutes =
-                          (_startValue * widget.totalDuration).round();
-                      final newEndMinutes =
-                          (_endValue * widget.totalDuration).round();
-                      widget.onChanged(newStartMinutes, newEndMinutes);
+                        final newEndMinutes =
+                            (_endValue * widget.totalDuration).round();
+                        widget.onChanged(startMinutes, newEndMinutes);
+                      }
                     },
                     child: Container(
-                      width: 24,
-                      height: 24,
+                      width: handleSize,
+                      height: handleSize,
                       decoration: BoxDecoration(
                         color: CupertinoColors.white,
                         shape: BoxShape.circle,
@@ -4159,74 +4145,6 @@ class _CustomWakeUpSliderState extends State<CustomWakeUpSlider> {
                   ),
                 ),
               ],
-            ),
-          ),
-
-          const SizedBox(height: 8),
-
-          // Out-of-bed time labels
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    '開始下床',
-                    style: const TextStyle(
-                      fontFamily: 'SF Pro Text',
-                      fontSize: 12,
-                      color: CupertinoColors.systemGrey,
-                    ),
-                  ),
-                  Text(
-                    formatTimeOfDay(outOfBedStartTime),
-                    style: const TextStyle(
-                      fontFamily: 'SF Pro Text',
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                      color: CupertinoColors.activeBlue,
-                    ),
-                  ),
-                ],
-              ),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  Text(
-                    '結束下床',
-                    style: const TextStyle(
-                      fontFamily: 'SF Pro Text',
-                      fontSize: 12,
-                      color: CupertinoColors.systemGrey,
-                    ),
-                  ),
-                  Text(
-                    formatTimeOfDay(outOfBedEndTime),
-                    style: const TextStyle(
-                      fontFamily: 'SF Pro Text',
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                      color: CupertinoColors.activeBlue,
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
-
-          const SizedBox(height: 8),
-
-          // Out-of-bed duration
-          Center(
-            child: Text(
-              '下床時長: ${formatMinutes(outOfBedDuration)}',
-              style: const TextStyle(
-                fontFamily: 'SF Pro Text',
-                fontSize: 14,
-                fontWeight: FontWeight.w600,
-                color: CupertinoColors.systemGrey,
-              ),
             ),
           ),
         ],

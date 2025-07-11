@@ -251,12 +251,14 @@ class WakeUpEvent {
   final DateTime? time;
   final bool gotOutOfBed;
   final int? outOfBedDurationMinutes;
+  final int? outOfBedStartMinutes;
   final int stayedInBedMinutes;
 
   const WakeUpEvent({
     required this.time,
     required this.gotOutOfBed,
     this.outOfBedDurationMinutes,
+    this.outOfBedStartMinutes,
     required this.stayedInBedMinutes,
   });
 
@@ -265,6 +267,7 @@ class WakeUpEvent {
       'time': time != null ? Timestamp.fromDate(time!) : null,
       'gotOutOfBed': gotOutOfBed,
       'outOfBedDurationMinutes': outOfBedDurationMinutes,
+      'outOfBedStartMinutes': outOfBedStartMinutes,
       'stayedInBedMinutes': stayedInBedMinutes,
     };
   }
@@ -274,6 +277,7 @@ class WakeUpEvent {
       time: map['time'] != null ? (map['time'] as Timestamp).toDate() : null,
       gotOutOfBed: map['gotOutOfBed'] as bool,
       outOfBedDurationMinutes: map['outOfBedDurationMinutes'] as int?,
+      outOfBedStartMinutes: map['outOfBedStartMinutes'] as int?,
       stayedInBedMinutes: map['stayedInBedMinutes'] as int,
     );
   }
