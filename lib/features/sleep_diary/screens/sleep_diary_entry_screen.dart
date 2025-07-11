@@ -3767,8 +3767,15 @@ class _SleepDiaryEntryScreenState extends State<SleepDiaryEntryScreen> {
                               startValue * availableWidth + details.delta.dx;
                           double newValue = newX / availableWidth;
 
-                          // Only constrain to track bounds
-                          if (newValue >= 0 && newValue <= 1) {
+                          // Calculate minimum allowed value (0) and maximum allowed value (endValue - 1 minute)
+                          double minValue = 0.0;
+                          double maxValue = endValue - (1.0 / totalDuration);
+
+                          // Ensure we maintain at least 1 minute gap between handles
+                          if (maxValue < minValue) maxValue = minValue;
+
+                          // Constrain the new value between min and max
+                          if (newValue >= minValue && newValue <= maxValue) {
                             setState(() {
                               startValue = newValue;
                             });
@@ -3827,8 +3834,15 @@ class _SleepDiaryEntryScreenState extends State<SleepDiaryEntryScreen> {
                               endValue * availableWidth + details.delta.dx;
                           double newValue = newX / availableWidth;
 
-                          // Only constrain to track bounds
-                          if (newValue >= 0 && newValue <= 1) {
+                          // Calculate minimum allowed value (startValue + 1 minute) and maximum allowed value (1.0)
+                          double minValue = startValue + (1.0 / totalDuration);
+                          double maxValue = 1.0;
+
+                          // Ensure we maintain at least 1 minute gap between handles
+                          if (minValue > maxValue) minValue = maxValue;
+
+                          // Constrain the new value between min and max
+                          if (newValue >= minValue && newValue <= maxValue) {
                             setState(() {
                               endValue = newValue;
                             });
